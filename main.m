@@ -58,7 +58,10 @@ for i=1:size(ordInd,1)
         for k=1:length(ordInd{i,3}{j,2})
             im = images(:,:,:,ordInd{i,3}{j,2}(k));
             depth = depths(:,:,ordInd{i,3}{j,2}(k));
-            raw_depth = rawDepths(:,:,ordInd{i,3}{j,2}(k));
+            raw_depth =depth;
+            %gauss_smoothed = imgaussfilt3(cat(3,im,depth));
+            depth = imgaussfilt(depth);
+            %raw_depth = rawDepths(:,:,ordInd{i,3}{j,2}(k));
             lab = labels(:,:,ordInd{i,3}{j,2}(k));
             f = show_im(im,depth,lab);
             xyz = rgb_p2rgb_w(depth);
@@ -67,11 +70,21 @@ for i=1:size(ordInd,1)
             x = xyz(45:471, 41:601, 1);
             y = xyz(45:471, 41:601, 2);
             z = xyz(45:471, 41:601, 3);
-            
             [p, n, conf] = compute_local_planes(x,y,z);
+            %nn_approach = [x(:),y(:),z(:),reshape(p,N,4),double(reshape(im(45:471, 41:601, :),N,3))/255];
+            %kmeans_input = [reshape(p,N,4),double(reshape(rgb2lab(im(45:471, 41:601, :)),N,3))/255];
+            kmeans_input = [reshape(n,N,3),double(reshape(rgb2lab(im(45:471, 41:601, :)),N,3))/255];
+            [idx,C,sumd,D] = kmeans(kmeans_input,6);
+            plot3D_labeled([x(:),y(:),z(:)],idx);
+            kmeans_input = reshape(n,N,3);
+            [idx2,C2,sumd2,D2] = kmeans(kmeans_input,6);
+            plot3D_labeled([x(:),y(:),z(:)],idx2);
+            kmeans_input = [reshape(p,N,4),double(reshape(rgb2lab(im(45:471, 41:601, :)),N,3))/255];
+            [idx3,C3,sumd3,D3] = kmeans(kmeans_input,6);
+            plot3D_labeled([x(:),y(:),z(:)],idx);
+
             [planes, plane_idx] = xyz2planes_ransac(x,y,z,...
                 reshape(n,N,3),abs(conf)>0.5);
- 
             lab1 = lab(45:471, 41:601);
             lab2 = uint8(zeros(427,561));
             for ii=1:size(planes,1)
