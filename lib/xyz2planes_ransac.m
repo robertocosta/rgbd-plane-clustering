@@ -1,5 +1,5 @@
 % Finds the major scene surfaces(planes) using ransac.
-%
+% 
 % Args:
 %   X - HxW matrix of X coordinates.
 %   Y - HxW matrix of Y coordinates.
