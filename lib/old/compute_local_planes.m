@@ -66,7 +66,7 @@ function [imgPlanes, imgNormals, imgConfs] = ...
         ny(k) = eigv(2,1);
         nz(k) = eigv(3,1);
         nd(k) = eigv(4,1);
-        imgConfs(k) = 1 - abs(sqrt(l(1) / l(2,2))); 
+        imgConfs(k) = 1 - sqrt(l(1) / l(2,2)); 
     end
 
     % Normalize so that first three coordinates form a unit normal vector and

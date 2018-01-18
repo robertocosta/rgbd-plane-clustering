@@ -18,7 +18,7 @@ function [planes, plane_idx] = xyz2planes_ransac(X, Y, Z, normals, isvalid)
   % inlier threshold for distance of 3D point to plane (sensor resolution is 0.003 per meter)
   distthresh = 0.0075*Z(:); 
   normthresh = 0.1; % inlier threshold for surface normal distance
-  min_pts_per_plane = 2000; % minimum number of inliers for plane to be kept
+  min_pts_per_plane = 2500; % minimum number of inliers for plane to be kept
   offset = 30; % horizontal/vertical offset for choosing triples of points
   maxOverlap = 0.5; % maximum number of points in common with previous planes to create a new plane
 
