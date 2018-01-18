@@ -1,5 +1,5 @@
 function ind = find_inliers(xyz,selected)
-%FIND_INLIERS Summary of this function goes here
+%FIND_INLIERS(xyz,selected) Returns the inliers among the selected points
 %   Detailed explanation goes here
 neighbors_layers = 3;
 rng('default');
