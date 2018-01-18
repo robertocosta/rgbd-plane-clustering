@@ -1,5 +1,5 @@
 function [plane,var] = find_plane(points)
-%FIND_PLANE Summary of this function goes here
+%FIND_PLANE Returns the best fitted plane and error by SVD
 %   Detailed explanation goes here
 A = [points,ones(size(points,1),1)];
 
