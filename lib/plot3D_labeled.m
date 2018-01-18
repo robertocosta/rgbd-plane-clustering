@@ -1,4 +1,5 @@
 function f = plot3D_labeled(xyz,label)
+% plot3D_labeled(xyz,label) xyz: table Nx3, label: table Nx1
     x = xyz(:,1);
     y = xyz(:,2);
     z = xyz(:,3);
