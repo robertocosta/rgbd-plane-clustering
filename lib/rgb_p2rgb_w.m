@@ -1,4 +1,5 @@
 function imDepth = rgb_p2rgb_w(imgDepth)
+%rgb_p2rgb_w(imgDepth) gets the 3D coordinates from depth and camera params
   camera_params;
   [H, W] = size(imgDepth);
 
