@@ -4,6 +4,6 @@ function ind = aggiungi_vicini(ind)
 mappa_vicinanza = const;
 ind = mappa_vicinanza(ind,:);
 ind = unique(ind(:));
-ind(ind==0)=[];
+ind(ind==0)=[]; 
 end
 
