@@ -1,5 +1,5 @@
 % Computes local surface normal information. Note that in this file, the Y
-% coordinate points up, consistent with the image coordinate frame.
+% coordinate points up, consistent with the image coordinate frame. 
 %
 % Args:
 %   X - Nx1 column vector of 3D point cloud X-coordinates
