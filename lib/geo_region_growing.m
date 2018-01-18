@@ -3,7 +3,7 @@ function ind = geo_region_growing(xyz,selected)
 %   Detailed explanation goes here
 neighbors_layers = 10;
 
-threshold = 1.01;
+threshold = 1;
 starting_points = xyz(selected,:);
 [~, min_var] = find_plane(starting_points);
 %final_points = xyz(final_ind,:);
