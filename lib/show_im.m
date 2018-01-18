@@ -1,5 +1,5 @@
 function f = show_im(frame,depth,label)
-%SHOW_IM Summary of this function goes here
+%SHOW_IM Show a rgb image, a depth image and a labeled image
 %   Detailed explanation goes here
 f = figure;
 subplot(2,2,1);
