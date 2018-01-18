@@ -1,5 +1,5 @@
 function ind = geo_region_growing(xyz,selected)
-%FIND_INLIERS Summary of this function goes here
+%FIND_INLIERS Geographical region growing from selected inliers
 %   Detailed explanation goes here
 neighbors_layers = 10;
 
