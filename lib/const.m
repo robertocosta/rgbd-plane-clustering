@@ -1,5 +1,5 @@
 function [h,w,neighbors] = const
-%CONST Summary of this function goes here
+%CONST Returns height and width of the image or the neighborhood table
 %   Detailed explanation goes here
 h = 427;
 w = 561;
