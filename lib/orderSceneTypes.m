@@ -1,6 +1,6 @@
 function tab = orderSceneTypes(sceneTypes)
 %orderSceneTypes returns a cell array with 2 elements per row: [sceneType,
-% indexes of the images of that specific Type]
+% indexes of the images of that specific Type] 
 tab = cell(1,2);
 i = 0;
 st = sceneTypes;

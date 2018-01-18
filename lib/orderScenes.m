@@ -1,5 +1,5 @@
 function tab = orderScenes(scenes,ids)
-%ORDERSCENES Summary of this function goes here
+%ORDERSCENES 
 %   Detailed explanation goes here
 tab = cell(1,2);
 i = 0;
