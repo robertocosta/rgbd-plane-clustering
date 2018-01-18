@@ -1,6 +1,5 @@
 function id = cell2idx(ar)
-%CELL2IDX Summary of this function goes here
-%   Detailed explanation goes here
+%CELL2IDX Get the labels from a cell array of indexes
 [h,w] = const;
 n=h*w;
 id = uint32(zeros(n,1));
