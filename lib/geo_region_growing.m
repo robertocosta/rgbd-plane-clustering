@@ -2,7 +2,9 @@ function ind = geo_region_growing(xyz,selected)
 %FIND_INLIERS Geographical region growing from selected inliers
 %   Detailed explanation goes here
 neighbors_layers = 10;
-
+if (size(selected,1)>5000)
+    selected = selected(randi(length(selected),5000,1));
+end
 threshold = 1;
 starting_points = xyz(selected,:);
 [~, min_var] = find_plane(starting_points);
