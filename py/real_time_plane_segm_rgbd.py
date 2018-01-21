@@ -20,7 +20,6 @@ class plane_clustering:
                           'labels', 'names', 'namesToIds', 'sceneTypes', 'scenes')
         self.current_index = -1
         self.next()
-        self.compute_normals()
 
     def next(self):
         if self.current_index+1 >= self.n:
@@ -38,13 +37,16 @@ class plane_clustering:
         self.point_cloud = np.zeros((3, self.H, self.W))
         self.__depth2xyz()
         print('data loaded successfully')
+        self.compute_normals()
 
     def compute_normals(self):
         #self.point_cloud
+        H = self.H
+        W = self.W
         tang_x = np.zeros((3,H,W))
         tang_y = np.zeros((3,H,W))
-        for i in range(1,H):
-            for j in range(1,W):
+        for i in range(1,H-1):
+            for j in range(1,W-1):
                 left = self.point_cloud[:,i-1,j]
                 right = self.point_cloud[:,i+1,j]
                 up = self.point_cloud[:,i,j-1]
@@ -57,16 +59,16 @@ class plane_clustering:
         integral_yx = np.zeros((H,W))
         integral_yy = np.zeros((H,W))
         integral_yz = np.zeros((H,W))
-        for j in range(1,H):
-            for i in range(1,W):
-                integral_xx[i,j] = integral_xx[i-1,j]+integral_xx[i,j-1]-integral_xx[i-1,j-1]+tang_x[1,i,j]
-                integral_xy[i,j] = integral_xy[i-1,j]+integral_xy[i,j-1]-integral_xy[i-1,j-1]+tang_x[2,i,j]
-                integral_xz[i,j] = integral_xz[i-1,j]+integral_xz[i,j-1]-integral_xz[i-1,j-1]+tang_x[3,i,j]
-                integral_yx[i,j] = integral_yx[i-1,j]+integral_yx[i,j-1]-integral_yx[i-1,j-1]+tang_y[1,i,j]
-                integral_yy[i,j] = integral_yy[i-1,j]+integral_yy[i,j-1]-integral_yy[i-1,j-1]+tang_y[2,i,j]
-                integral_yz[i,j] = integral_yz[i-1,j]+integral_yz[i,j-1]-integral_yz[i-1,j-1]+tang_y[3,i,j]
-        
-                
+        for i in range(1,H):
+            for j in range(1,W):
+                integral_xx[i,j] = integral_xx[i-1,j]+integral_xx[i,j-1]-integral_xx[i-1,j-1]+tang_x[0,i,j]
+                integral_xy[i,j] = integral_xy[i-1,j]+integral_xy[i,j-1]-integral_xy[i-1,j-1]+tang_x[1,i,j]
+                integral_xz[i,j] = integral_xz[i-1,j]+integral_xz[i,j-1]-integral_xz[i-1,j-1]+tang_x[2,i,j]
+                integral_yx[i,j] = integral_yx[i-1,j]+integral_yx[i,j-1]-integral_yx[i-1,j-1]+tang_y[0,i,j]
+                integral_yy[i,j] = integral_yy[i-1,j]+integral_yy[i,j-1]-integral_yy[i-1,j-1]+tang_y[1,i,j]
+                integral_yz[i,j] = integral_yz[i-1,j]+integral_yz[i,j-1]-integral_yz[i-1,j-1]+tang_y[2,i,j]
+        print('integral image of tangents computed')
+        # vectorial product between the 2 tangents to get the normal
 
     def __load_mat(self):
         try:
