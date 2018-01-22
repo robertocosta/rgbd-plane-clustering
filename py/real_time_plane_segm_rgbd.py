@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
 import scipy.ndimage as ndimage
-
+from mpl_toolkits.mplot3d import Axes3D
 class plane_clustering:
     def __init__(self, **kwargs):
         self.mat_path = kwargs.get('mat_path', '.')
@@ -20,6 +20,10 @@ class plane_clustering:
                           'labels', 'names', 'namesToIds', 'sceneTypes', 'scenes')
         self.current_index = -1
         self.normals = []
+        self.normals_length = 1
+        # computing average normals
+        self.avg_win_long = 1  # half of the greatest dimension of the avg window
+        self.avg_win_short = 1 # half of the smaller dimension of the avg window
         self.next()
 
     def next(self):
@@ -38,11 +42,34 @@ class plane_clustering:
         # from depth to [x,y,z] coordinates
         self.point_cloud = self.__depth2xyz()
         print('Image '+str(self.current_index+1)+' of '+str(self.n)+' loaded successfully')
-        # computing average normals
-        self.avg_win_long = 2  # half of the greatest dimension of the avg window
-        self.avg_win_short = 1 # half of the smaller dimension of the avg window
         self.normals.append(self.compute_normals())
         return True
+    
+    def show(self):
+        line_width = 0.4
+        point_size = 0.5
+        norm_length = 0.008
+        lato = 30
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        #ax = fig.add_subplot(111, projection='3d')
+        current_pc = self.point_cloud
+        current_norm = self.normals[self.current_index]
+        current_pc = current_pc[:,0:lato,0:lato]
+        current_norm = current_norm[:,0:lato,0:lato]
+        for i in range(lato):
+            for j in range(lato):
+                leng = np.linalg.norm(current_norm[:,i,j])
+                if (leng>0):
+                    current_norm[:,i,j] = current_norm[:,i,j] / leng * norm_length
+        #print(current_pc)
+        #print(current_norm)
+        ax.scatter(current_pc[0,:,:], current_pc[1,:,:], current_pc[2,:,:], c='b',s=point_size)
+        q = ax.quiver(current_pc[0,:,:], current_pc[1,:,:], current_pc[2,:,:],
+        current_norm[0,:,:],current_norm[1,:,:],current_norm[2,:,:], lw=line_width)
+        plt.draw()
+        plt.show()
+        return plt
 
     def compute_normals(self):
         H = self.H
@@ -99,7 +126,12 @@ class plane_clustering:
                 tan_x = np.array([tan_xx,tan_xy,tan_xz])
                 tan_y = np.array([tan_yx,tan_yy,tan_yz])
                 norm = np.cross(tan_x,tan_y)
-                normals[:,i,j] = norm
+                #if (norm[0]*norm[1]*norm[2]<0):
+                #    norm = -norm
+                leng = np.linalg.norm(norm)
+                if (leng>0):
+                    normals[:,i,j] = norm / leng * self.normals_length
+
         print('normals computed')
         return normals
 
@@ -132,6 +164,8 @@ class plane_clustering:
 if __name__ == "__main__":
     #pc = plane_clustering(mat_path='../../3DFinalProj/mat/reduced_dataset.mat')
     pc = plane_clustering(mat_path='../reduced_reduced_dataset.mat',smoothed=True, sigma=0.8)
+    pc.show()
+    input("Press Enter to continue...")
     while (pc.next()): pass
     
     #print(pc.point_cloud)
