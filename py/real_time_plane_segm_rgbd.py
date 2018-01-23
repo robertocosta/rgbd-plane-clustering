@@ -5,10 +5,17 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
-import scipy.ndimage as ndimage
+import scipy.ndimage as sndim
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.cluster.vq import kmeans2, vq, whiten
+from skimage import color
+
+
 class plane_clustering:
     def __init__(self, **kwargs):
+        self.current_index = -1
+        self.normals = []
+        self.clusters = []
         self.mat_path = kwargs.get('mat_path', '.')
         self.smoothed = kwargs.get('smoothed', False)
         self.sigm = kwargs.get('sigma', 1)
@@ -18,8 +25,6 @@ class plane_clustering:
             exit()
         self.var_names = ('accelData', 'depths', 'rawDepths', 'images', 'instances',
                           'labels', 'names', 'namesToIds', 'sceneTypes', 'scenes')
-        self.current_index = -1
-        self.normals = []
         self.normals_length = 1
         # computing average normals
         self.avg_win_long = 1  # half of the greatest dimension of the avg window
@@ -31,18 +36,21 @@ class plane_clustering:
             print('Finished')
             return False
         self.current_index = self.current_index+1
-        self.image = self.dataset_dict['images'][:,:,:,self.current_index]
-        shap = self.image.shape
-        self.H = shap[0]
-        self.W = shap[1]
-        self.depth = self.dataset_dict['depths'][:,:,self.current_index]
+        self.depth = self.dataset_dict['depths'][:, :, self.current_index]
+        self.image = self.dataset_dict['images'][:, :, :, self.current_index]
+        self.label = self.dataset_dict['labels'][:, :, self.current_index]
+        self.H = self.image.shape[0]
+        self.W = self.image.shape[1]
         if self.smoothed:
-            self.depth = ndimage.gaussian_filter(self.depth,sigma=(self.sigm,self.sigm),order=0)
-        self.label = self.dataset_dict['labels'][:,:,self.current_index]
+            self.depth = sndim.gaussian_filter(self.depth, sigma=(self.sigm, self.sigm), order=0)
         # from depth to [x,y,z] coordinates
         self.point_cloud = self.__depth2xyz()
         print('Image '+str(self.current_index+1)+' of '+str(self.n)+' loaded successfully')
         self.normals.append(self.compute_normals())
+        self.clusters.append(self.run_kmeans())
+        curr_cluster = self.clusters[self.current_index]
+        #print(str(curr_cluster['normcolor'/all/xyz/color/normals]['centroid'/label]))
+        
         return True
     
     def show(self):
@@ -55,18 +63,19 @@ class plane_clustering:
         #ax = fig.add_subplot(111, projection='3d')
         current_pc = self.point_cloud
         current_norm = self.normals[self.current_index]
-        current_pc = current_pc[:,0:lato,0:lato]
-        current_norm = current_norm[:,0:lato,0:lato]
+        current_pc = current_pc[:, 0:lato, 0:lato]
+        current_norm = current_norm[:, 0:lato, 0:lato]
         for i in range(lato):
             for j in range(lato):
-                leng = np.linalg.norm(current_norm[:,i,j])
+                leng = np.linalg.norm(current_norm[:, i, j])
                 if (leng>0):
-                    current_norm[:,i,j] = current_norm[:,i,j] / leng * norm_length
+                    current_norm[:, i, j] = current_norm[:, i, j] / leng * norm_length
         #print(current_pc)
         #print(current_norm)
-        ax.scatter(current_pc[0,:,:], current_pc[1,:,:], current_pc[2,:,:], c='b',s=point_size)
-        q = ax.quiver(current_pc[0,:,:], current_pc[1,:,:], current_pc[2,:,:],
-        current_norm[0,:,:],current_norm[1,:,:],current_norm[2,:,:], lw=line_width)
+        ax.scatter(current_pc[0, :, :], current_pc[1, :, :], 
+        current_pc[2, :, :], c='b',s=point_size)
+        q = ax.quiver(current_pc[0, :, :], current_pc[1, :, :],current_pc[2, :, :],
+        current_norm[0, :, :],current_norm[1, :, :],current_norm[2, :, :], lw=line_width)
         plt.draw()
         plt.show()
         return plt
@@ -101,6 +110,7 @@ class plane_clustering:
         print('integral image of tangents computed')
         # vectorial product between the 2 tangents to get the normal
         normals = np.zeros((3,H,W))
+        valid = np.empty((H,W), bool)
         w1 = self.avg_win_long # half of the greatest dimension of the averaging window
         w2 = self.avg_win_short # half of the smaller dimension of the averaging window
         for i in range(w1,H-w1):
@@ -130,10 +140,54 @@ class plane_clustering:
                 #    norm = -norm
                 leng = np.linalg.norm(norm)
                 if (leng>0):
+                    valid[i,j]=True
                     normals[:,i,j] = norm / leng * self.normals_length
-
         print('normals computed')
+        self.valid = valid
         return normals
+
+    def run_kmeans(self):
+        label_im = self.label
+
+        all_in = np.zeros((self.H*self.W,9))
+        all_in[:,0:3] = self.__mat2tab(color.rgb2lab(self.image))
+        all_in[:,3:6] = self.__mat2tab(self.normals[self.current_index])
+        all_in[:,6:9] = self.__mat2tab(self.point_cloud)
+        
+        whitened = whiten(all_in)
+
+        groups = {}
+        n_labels = 8
+        centroidc, labelc = kmeans2(all_in[:,0:3],n_labels,iter=10, thresh=1e-05, minit='random', missing='warn', check_finite=True)
+        groups.update({'color': {'centroid' : centroidc, 'label' : labelc}})
+        centroidn, labeln = kmeans2(all_in[:,3:6],n_labels)
+        groups.update({'normals': {'centroid' : centroidn, 'label' : labeln}})
+        centroidp, labelp = kmeans2(all_in[:,6:9],n_labels)
+        groups.update({'xyz': {'centroid' : centroidp, 'label' : labelp}})
+        centroid, label = kmeans2(all_in[:,0:6],n_labels)
+        groups.update({'normcolor': {'centroid' : centroid, 'label' : label}})
+        centroid, label = kmeans2(all_in,8)
+        groups.update({'all': {'centroid' : centroid, 'label' : label}})
+        print('k-means done')
+        return groups
+
+    def __mat2tab(self,mat):
+        if mat.shape[0]==3:
+            n_rows =  int(mat.size/3)
+            tab = np.zeros((n_rows,3))
+            tab[:,0] = np.reshape(mat[0,:,:],n_rows)
+            tab[:,1] = np.reshape(mat[1,:,:],n_rows)
+            tab[:,2] = np.reshape(mat[2,:,:],n_rows)
+            return tab
+
+        if mat.shape.__len__()==3:
+            n_rows =  int(mat.size/3)
+            tab = np.zeros((n_rows,3))
+            tab[:,0] = np.reshape(mat[:,:,0],n_rows)
+            tab[:,1] = np.reshape(mat[:,:,1],n_rows)
+            tab[:,2] = np.reshape(mat[:,:,2],n_rows)
+            return tab
+                    
 
     def __load_mat(self):
         try:
@@ -171,5 +225,5 @@ if __name__ == "__main__":
     #print(pc.point_cloud)
     #plt.imshow(pc.image, interpolation='nearest')
     #plt.show()
-    #plt.imshow(ndimage.gaussian_filter(pc.image,sigma=(1,1,0),order=0))
+    #plt.imshow(sndim.gaussian_filter(pc.image,sigma=(1,1,0),order=0))
     #plt.show()
