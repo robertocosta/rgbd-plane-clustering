@@ -24,8 +24,14 @@ class plane_clustering:
             print('Error loading \'mat\' dataset')
             exit()
         self.var_names = ('accelData', 'depths', 'rawDepths', 'images', 'instances',
-                          'labels', 'names', 'namesToIds', 'sceneTypes', 'scenes')
+                          'labels', 'names', 'sceneTypes', 'scenes')
         self.normals_length = 1
+        for i in range(0,self.n):
+            self.normals.append([])
+            self.clusters.append([])
+        # print((self.dataset_dict['names'][1][0][0]))
+        # print(str(self.dataset_dict['names']))
+
         # computing average normals
         self.avg_win_long = 1  # half of the greatest dimension of the avg window
         self.avg_win_short = 1 # half of the smaller dimension of the avg window
@@ -46,13 +52,68 @@ class plane_clustering:
         # from depth to [x,y,z] coordinates
         self.point_cloud = self.__depth2xyz()
         print('Image '+str(self.current_index+1)+' of '+str(self.n)+' loaded successfully')
-        self.normals.append(self.compute_normals())
-        self.clusters.append(self.run_kmeans())
-        curr_cluster = self.clusters[self.current_index]
+        self.normals.insert(self.current_index,self.compute_normals())
+        #self.normals.append(self.compute_normals())
+        # self.n_labels = 8
+        # self.clusters.insert(self.current_index,self.run_kmeans())
+        # curr_cluster = self.clusters[self.current_index]
         #print(str(curr_cluster['normcolor'/all/xyz/color/normals]['centroid'/label]))
-        
+
+        plt.imshow(self.image, interpolation='nearest')
+
+
+        # labtab = self.__mat2tab(curr_cluster['normals']['label'])
+        # normtab = self.__mat2tab(self.normals[self.current_index])
+        # for j in range(0,self.n_labels):
+        #     labelj = []
+        #     for i in range(0,self.H*self.W):
+        #         if labtab[i]==j:
+        #             labelj.append(i)
+        #     print('label '+str(j))
+        #     print(str(normtab[labelj,:]))
+        #     print(str(np.mean(normtab[labelj,:],0)))
+        #     self.plot_pc(labelj)
+
+
+        self.plot_pc(self.find_floor())
+
+
         return True
-    
+
+    def find_floor(self):
+        n = self.normals[self.current_index]
+        n_tab = self.__mat2tab(n)
+        indexes = []
+        threshold = 0.1
+        for i in range(0,self.W*self.H):
+            if np.linalg.norm(n_tab[i,:]-[0,0,1])<threshold:
+                indexes.append(i)
+            if np.linalg.norm(n_tab[i,:]-[0,0,-1])<threshold:
+                indexes.append(i)
+            
+        return indexes
+     
+
+    def plot_pc(self,plane_idx):
+        point_size = 0.1
+        line_width = 0.4
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        pc_tab = self.__mat2tab(self.point_cloud)
+        norm_tab = self.__mat2tab(self.normals[self.current_index])
+        ax.scatter(pc_tab[plane_idx, 0], pc_tab[plane_idx, 1], pc_tab[plane_idx, 2], 
+        c='b',s=point_size)
+        ax.azim = -90
+        ax.elev = 25
+        ax.set_xlim([self.xmin,self.xmax])
+        ax.set_ylim([self.ymin,self.ymax])
+        ax.set_zlim([0,self.zmax])
+        # q = ax.quiver(pc_tab[plane_idx, 0], pc_tab[plane_idx, 1], pc_tab[plane_idx, 2],
+        # norm_tab[plane_idx, 0],norm_tab[plane_idx, 1],norm_tab[plane_idx, 2], lw=line_width)
+        plt.draw()
+        plt.show()
+        return plt
+
     def show(self):
         line_width = 0.4
         point_size = 0.5
@@ -87,10 +148,10 @@ class plane_clustering:
         tang_y = np.zeros((3,H,W))
         for i in range(1,H-1):
             for j in range(1,W-1):
-                left = self.point_cloud[:,i-1,j]
-                right = self.point_cloud[:,i+1,j]
-                up = self.point_cloud[:,i,j-1]
-                down = self.point_cloud[:,i,j+1]
+                left = self.point_cloud[:,i,j-1]
+                right = self.point_cloud[:,i,j]
+                up = self.point_cloud[:,i-1,j-1]
+                down = self.point_cloud[:,i+1,j]
                 tang_x[:,i,j] = right - left
                 tang_y[:,i,j] = down - up
         integral_xx = np.zeros((H,W))
@@ -113,35 +174,30 @@ class plane_clustering:
         valid = np.empty((H,W), bool)
         w1 = self.avg_win_long # half of the greatest dimension of the averaging window
         w2 = self.avg_win_short # half of the smaller dimension of the averaging window
-        for i in range(w1,H-w1):
-            for j in range(w1,W-w1):
-                tan_xx_l = integral_xx[i+w1,j]-integral_xx[i+w1,j-w2]-integral_xx[i-w1,j]+integral_xx[i-w1,j-w2]
-                tan_xx_r = integral_xx[i+w1,j+w2]-integral_xx[i+w1,j]-integral_xx[i-w1,j+w2]+integral_xx[i-w1,j]
-                tan_xy_l = integral_xy[i+w1,j]-integral_xy[i+w1,j-w2]-integral_xy[i-w1,j]+integral_xy[i-w1,j-w2]
-                tan_xy_r = integral_xy[i+w1,j+w2]-integral_xy[i+w1,j]-integral_xy[i-w1,j+w2]+integral_xy[i-w1,j]
-                tan_xz_l = integral_xz[i+w1,j]-integral_xz[i+w1,j-w2]-integral_xz[i-w1,j]+integral_xz[i-w1,j-w2]
-                tan_xz_r = integral_xz[i+w1,j+w2]-integral_xz[i+w1,j]-integral_xz[i-w1,j+w2]+integral_xz[i-w1,j]
-                tan_yx_u = integral_yx[i,j+w1]-integral_yx[i,j-w1]-integral_yx[i-w2,j+w1]+integral_yx[i-w2,j-w1]
-                tan_yx_d = integral_yx[i+w2,j+w1]-integral_yx[i,j+w1]-integral_yx[i+w2,j-w1]+integral_yx[i,j-w1]
-                tan_yy_u = integral_yy[i,j+w1]-integral_yy[i,j-w1]-integral_yy[i-w2,j+w1]+integral_yy[i-w2,j-w1]
-                tan_yy_d = integral_yy[i+w2,j+w1]-integral_yy[i,j+w1]-integral_yy[i+w2,j-w1]+integral_yy[i,j-w1]
-                tan_yz_u = integral_yz[i,j+w1]-integral_yz[i,j-w1]-integral_yz[i-w2,j+w1]+integral_yz[i-w2,j-w1]
-                tan_yz_d = integral_yz[i+w2,j+w1]-integral_yz[i,j+w1]-integral_yz[i+w2,j-w1]+integral_yz[i,j-w1]
-                tan_xx = (tan_xx_r-tan_xx_l)/((2*w1+1)*(2*w2+1))
-                tan_xy = (tan_xy_r-tan_xy_l)/((2*w1+1)*(2*w2+1))
-                tan_xz = (tan_xz_r-tan_xz_l)/((2*w1+1)*(2*w2+1))
-                tan_yx = (tan_yx_d-tan_yx_u)/((2*w1+1)*(2*w2+1))
-                tan_yy = (tan_yy_d-tan_yy_u)/((2*w1+1)*(2*w2+1))
-                tan_yz = (tan_yz_d-tan_yz_u)/((2*w1+1)*(2*w2+1))
+        max_w = np.maximum(w1,w2)
+        for i in range(max_w,H-max_w):
+            for j in range(max_w,W-max_w):
+                tan_xx = (integral_xx[i+w2,j+w1]-integral_xx[i-w2-1,j+w1]-integral_xx[i+w2,j-w1-1]
+                +integral_xx[i-w2-1,j-w1-1])/((2*w1+1)*(2*w2+1))
+                tan_xy = (integral_xy[i+w2,j+w1]-integral_xy[i-w2-1,j+w1]-integral_xy[i+w2,j-w1-1]
+                +integral_xy[i-w2-1,j-w1-1])/((2*w1+1)*(2*w2+1))
+                tan_xz = (integral_xz[i+w2,j+w1]-integral_xz[i-w2-1,j+w1]-integral_xz[i+w2,j-w1-1]
+                +integral_xz[i-w2-1,j-w1-1])/((2*w1+1)*(2*w2+1))
+                tan_yx = (integral_yx[i+w1,j+w2]-integral_yx[i-w1-1,j+w2]-integral_yx[i+w1,j-w2-1]
+                +integral_yx[i-w1-1,j-w2-1])/((2*w1+1)*(2*w2+1))
+                tan_yy = (integral_yy[i+w1,j+w2]-integral_yy[i-w1-1,j+w2]-integral_yy[i+w1,j-w2-1]
+                +integral_yy[i-w1-1,j-w2-1])/((2*w1+1)*(2*w2+1))
+                tan_yz = (integral_yz[i+w1,j+w2]-integral_yz[i-w1-1,j+w2]-integral_yz[i+w1,j-w2-1]
+                +integral_yz[i-w1-1,j-w2-1])/((2*w1+1)*(2*w2+1))
                 tan_x = np.array([tan_xx,tan_xy,tan_xz])
                 tan_y = np.array([tan_yx,tan_yy,tan_yz])
                 norm = np.cross(tan_x,tan_y)
-                #if (norm[0]*norm[1]*norm[2]<0):
+                # if (norm[0]*norm[1]*norm[2]<0):
                 #    norm = -norm
                 leng = np.linalg.norm(norm)
                 if (leng>0):
                     valid[i,j]=True
-                    normals[:,i,j] = norm / leng * self.normals_length
+                    normals[:,i,j] = norm / leng
         print('normals computed')
         self.valid = valid
         return normals
@@ -157,7 +213,7 @@ class plane_clustering:
         whitened = whiten(all_in)
 
         groups = {}
-        n_labels = 8
+        n_labels = self.n_labels
         centroidc, labelc = kmeans2(all_in[:,0:3],n_labels,iter=10, thresh=1e-05, minit='random', missing='warn', check_finite=True)
         groups.update({'color': {'centroid' : centroidc, 'label' : labelc}})
         centroidn, labeln = kmeans2(all_in[:,3:6],n_labels)
@@ -187,7 +243,8 @@ class plane_clustering:
             tab[:,1] = np.reshape(mat[:,:,1],n_rows)
             tab[:,2] = np.reshape(mat[:,:,2],n_rows)
             return tab
-                    
+        
+        return np.reshape(mat,mat.size)
 
     def __load_mat(self):
         try:
@@ -211,16 +268,21 @@ class plane_clustering:
         y = -y+np.ndarray.max(y)
         point_cloud[1,:,:] = depth
         point_cloud[2,:,:] = y
+        self.xmin = np.ndarray.min(point_cloud[0,:,:])
+        self.xmax = np.ndarray.max(point_cloud[0,:,:])
+        self.ymin = np.ndarray.min(point_cloud[1,:,:])
+        self.ymax = np.ndarray.max(point_cloud[1,:,:])
+        self.zmax = np.ndarray.max(y)
         return point_cloud
 
 
 
 if __name__ == "__main__":
-    #pc = plane_clustering(mat_path='../../3DFinalProj/mat/reduced_dataset.mat')
+    #pc = plane_clustering(mat_path='../reduced_reduced_dataset.mat')
     pc = plane_clustering(mat_path='../reduced_reduced_dataset.mat',smoothed=True, sigma=0.8)
     pc.show()
     input("Press Enter to continue...")
-    while (pc.next()): pass
+    while (pc.next()): input("Press Enter to continue...")
     
     #print(pc.point_cloud)
     #plt.imshow(pc.image, interpolation='nearest')
