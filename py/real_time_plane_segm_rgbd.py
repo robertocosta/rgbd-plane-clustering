@@ -9,7 +9,7 @@ import scipy.ndimage as sndim
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.cluster.vq import kmeans2, vq, whiten
 from skimage import color
-
+import time
 
 class plane_clustering:
     def __init__(self, **kwargs):
@@ -74,10 +74,29 @@ class plane_clustering:
         #     print(str(np.mean(normtab[labelj,:],0)))
         #     self.plot_pc(labelj)
 
+        pc_tab = self.__mat2tab(self.point_cloud)
+        floors_idx = self.find_floor()
+        pc_floors = pc_tab[floors_idx,:]
 
-        self.plot_pc(self.find_floor())
+        self.plot_pc(floors_idx)
 
-
+        import sklearn.mixture as skm
+        bgm = skm.BayesianGaussianMixture(n_components=50,covariance_type='full',tol=1e-3,reg_covar=1e-6, max_iter=200,n_init=2,
+        init_params='kmeans',weight_concentration_prior_type='dirichlet_process',weight_concentration_prior=None,mean_precision_prior=None,
+        mean_prior=None,degrees_of_freedom_prior=None,covariance_prior=None,random_state=None,warm_start=False,verbose=0,verbose_interval=10)
+        #bgm.fit(floors, self.__mat2tab(self.label))
+        bgm.fit(pc_floors)
+        predicted = bgm.predict(pc_floors)
+        planes = []
+        for k in range(np.min(predicted),np.max(predicted)+1):
+            klabel = [i for i,j in enumerate(predicted) if j==k]
+            if (klabel.__len__()>0):
+                print('n. of points: '+str(klabel.__len__()))
+                idx = [floors_idx[kk] for kk in klabel]
+                plane_coeff = self.__find_plane(pc_tab[idx,:])
+                planes.append({'eq':plane_coeff,'idx':idx})
+                print('[a,b,c,d]='+str(plane_coeff))
+                self.plot_pc(idx)
         return True
 
     def find_floor(self):
@@ -235,16 +254,14 @@ class plane_clustering:
             tab[:,1] = np.reshape(mat[1,:,:],n_rows)
             tab[:,2] = np.reshape(mat[2,:,:],n_rows)
             return tab
-
         if mat.shape.__len__()==3:
             n_rows =  int(mat.size/3)
             tab = np.zeros((n_rows,3))
             tab[:,0] = np.reshape(mat[:,:,0],n_rows)
             tab[:,1] = np.reshape(mat[:,:,1],n_rows)
             tab[:,2] = np.reshape(mat[:,:,2],n_rows)
-            return tab
-        
-        return np.reshape(mat,mat.size)
+            return tab     
+        return np.reshape(mat,(mat.size,1))
 
     def __load_mat(self):
         try:
@@ -275,7 +292,24 @@ class plane_clustering:
         self.zmax = np.ndarray.max(y)
         return point_cloud
 
-
+    def __find_plane(self,points):
+        # import time
+        Points = np.hstack((points,np.ones((points.shape[0],1))))
+        # time_start = time.clock()
+        eigenvalues, eigenvectors = np.linalg.eig(np.dot(np.transpose(Points),Points))
+        # time_elapsed = (time.clock() - time_start)
+        # print(time_elapsed)
+        # time_start = time.clock()
+        # u, s, vh = np.linalg.svd(Points, full_matrices=True)
+        # time_elapsed = (time.clock() - time_start)
+        # print(time_elapsed)
+        plane_coeff = -eigenvectors[:,3]/np.linalg.norm(eigenvectors[:,3])
+        # plane_coeff_2 = vh[3,:]
+        # print('svd:\n'+str(str(vh)))
+        # print('eigenvectors:\n'+str(eigenvectors))
+        # print('a,b,c,d (eig):\n'+str(plane_coeff))
+        # print('a,b,c,d (svd):\n'+str(plane_coeff_2))
+        return plane_coeff
 
 if __name__ == "__main__":
     #pc = plane_clustering(mat_path='../reduced_reduced_dataset.mat')
