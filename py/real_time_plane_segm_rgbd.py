@@ -79,24 +79,46 @@ class plane_clustering:
         pc_floors = pc_tab[floors_idx,:]
 
         self.plot_pc(floors_idx)
-
+        # http://scikit-learn.org/stable/modules/generated/sklearn.mixture.BayesianGaussianMixture.html
         import sklearn.mixture as skm
-        bgm = skm.BayesianGaussianMixture(n_components=50,covariance_type='full',tol=1e-3,reg_covar=1e-6, max_iter=200,n_init=2,
-        init_params='kmeans',weight_concentration_prior_type='dirichlet_process',weight_concentration_prior=None,mean_precision_prior=None,
-        mean_prior=None,degrees_of_freedom_prior=None,covariance_prior=None,random_state=None,warm_start=False,verbose=0,verbose_interval=10)
+        bgm = skm.BayesianGaussianMixture(n_components=50,covariance_type='full',tol=1e-3,reg_covar=1e-6, 
+        max_iter=200,n_init=2,init_params='kmeans',weight_concentration_prior_type='dirichlet_process',
+        weight_concentration_prior=None,mean_precision_prior=None,mean_prior=None,degrees_of_freedom_prior=None,
+        covariance_prior=None,random_state=None,warm_start=False,verbose=0,verbose_interval=10)
         #bgm.fit(floors, self.__mat2tab(self.label))
         bgm.fit(pc_floors)
         predicted = bgm.predict(pc_floors)
         planes = []
         for k in range(np.min(predicted),np.max(predicted)+1):
             klabel = [i for i,j in enumerate(predicted) if j==k]
-            if (klabel.__len__()>0):
+            if (klabel.__len__()>10):
                 print('n. of points: '+str(klabel.__len__()))
                 idx = [floors_idx[kk] for kk in klabel]
                 plane_coeff = self.__find_plane(pc_tab[idx,:])
                 planes.append({'eq':plane_coeff,'idx':idx})
                 print('[a,b,c,d]='+str(plane_coeff))
-                self.plot_pc(idx)
+        min_plane_dist = 0.5
+        for i,p1 in enumerate(planes):
+            for j,p2 in enumerate(planes):
+                if j>i:
+                    print('comparing '+str(i)+','+str(j))
+                    d1 = p1['eq'][3]/np.sqrt(p1['eq'][0]**2+p1['eq'][1]**2+p1['eq'][2]**2)
+                    d2 = p2['eq'][3]/np.sqrt(p2['eq'][0]**2+p2['eq'][1]**2+p2['eq'][2]**2)
+                    if np.linalg.norm(p1['eq']-p2['eq'])<min_plane_dist:
+                        print('merging '+str(i)+','+str(j))
+                        if p1['idx'].__len__()>p2['idx'].__len__():
+                            p1['idx'] = np.hstack((p1['idx'],p2['idx']))
+                            planes.__delitem__(j)
+                            print('distance of plane '+str(i)+' from origin: '+str(d1))
+                            print('distance of plane '+str(j)+' from origin: '+str(d2))
+                        else:
+                            p2['idx'] = np.hstack((p2['idx'],p1['idx']))
+                            planes.__delitem__(i)
+                            print('distance of plane '+str(i)+' from origin: '+str(d1))
+                            print('distance of plane '+str(j)+' from origin: '+str(d2))
+        #print(str(planes))
+        for i,p in enumerate(planes):
+            self.plot_pc(p['idx'])
         return True
 
     def find_floor(self):
