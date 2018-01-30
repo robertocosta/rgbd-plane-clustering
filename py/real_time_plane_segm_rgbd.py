@@ -16,6 +16,7 @@ class plane_clustering:
         self.current_index = -1
         self.normals = []
         self.clusters = []
+        self.clustered_normals = []
         self.mat_path = kwargs.get('mat_path', '.')
         self.smoothed = kwargs.get('smoothed', False)
         self.sigm = kwargs.get('sigma', 1)
@@ -33,7 +34,7 @@ class plane_clustering:
         # print(str(self.dataset_dict['names']))
 
         # computing average normals
-        self.avg_win_long = 1  # half of the greatest dimension of the avg window
+        self.avg_win_long = 2  # half of the greatest dimension of the avg window
         self.avg_win_short = 1 # half of the smaller dimension of the avg window
         self.next()
 
@@ -53,6 +54,7 @@ class plane_clustering:
         self.point_cloud = self.__depth2xyz()
         print('Image '+str(self.current_index+1)+' of '+str(self.n)+' loaded successfully')
         self.normals.insert(self.current_index,self.compute_normals())
+        self.clustered_normals.insert(self.current_index,self.cluster_normals())
         #self.normals.append(self.compute_normals())
         # self.n_labels = 8
         # self.clusters.insert(self.current_index,self.run_kmeans())
@@ -97,41 +99,93 @@ class plane_clustering:
                 plane_coeff = self.__find_plane(pc_tab[idx,:])
                 planes.append({'eq':plane_coeff,'idx':idx})
                 print('[a,b,c,d]='+str(plane_coeff))
-        min_plane_dist = 0.5
+        min_plane_dist = 0.1
         for i,p1 in enumerate(planes):
             for j,p2 in enumerate(planes):
                 if j>i:
-                    print('comparing '+str(i)+','+str(j))
-                    d1 = p1['eq'][3]/np.sqrt(p1['eq'][0]**2+p1['eq'][1]**2+p1['eq'][2]**2)
-                    d2 = p2['eq'][3]/np.sqrt(p2['eq'][0]**2+p2['eq'][1]**2+p2['eq'][2]**2)
-                    if np.linalg.norm(p1['eq']-p2['eq'])<min_plane_dist:
-                        print('merging '+str(i)+','+str(j))
-                        if p1['idx'].__len__()>p2['idx'].__len__():
-                            p1['idx'] = np.hstack((p1['idx'],p2['idx']))
-                            planes.__delitem__(j)
-                            print('distance of plane '+str(i)+' from origin: '+str(d1))
-                            print('distance of plane '+str(j)+' from origin: '+str(d2))
+                    # print('comparing '+str(i)+','+str(j))
+                    d1 = abs(p1['eq'][3])/np.sqrt(p1['eq'][0]**2+p1['eq'][1]**2+p1['eq'][2]**2)
+                    d2 = abs(p2['eq'][3])/np.sqrt(p2['eq'][0]**2+p2['eq'][1]**2+p2['eq'][2]**2)
+                    # if np.linalg.norm(p1['eq']-p2['eq'])<min_plane_dist:
+                    if (abs(d1-d2)<min_plane_dist):
+                        # distance between 2 planes (take point (1,1,z2))
+                        d12 = abs(p1['eq'][0]+p1['eq'][1]+p1['eq'][2]*(-(p2['eq'][0]+p2['eq'][1]+p2['eq'][3])/p2['eq'][2])+p1['eq'][3])/np.sqrt(p1['eq'][0]**2+p1['eq'][1]**2+p1['eq'][2]**2)
+                        if d12<min(d1,d2):
+                            print('merging '+str(i)+','+str(j))
+                            if p1['idx'].__len__()>p2['idx'].__len__():
+                                p1['idx'] = np.hstack((p1['idx'],p2['idx']))
+                                planes.__delitem__(j)
+                                print('distance of plane '+str(i)+' from origin: '+str(d1))
+                                print('distance of plane '+str(j)+' from origin: '+str(d2))
+                            else:
+                                p2['idx'] = np.hstack((p2['idx'],p1['idx']))
+                                planes.__delitem__(i)
+                                print('distance of plane '+str(i)+' from origin: '+str(d1))
+                                print('distance of plane '+str(j)+' from origin: '+str(d2))
                         else:
-                            p2['idx'] = np.hstack((p2['idx'],p1['idx']))
-                            planes.__delitem__(i)
-                            print('distance of plane '+str(i)+' from origin: '+str(d1))
-                            print('distance of plane '+str(j)+' from origin: '+str(d2))
+                            print('escluso')
         #print(str(planes))
+        # quantization of the 3 components of the normals
+        # mapping 3D normals into phi,theta space (n_x / n_z, n_y / n_z)
+        # clustering
+        # evaluation:
+        # - take each custer
+        # - take the most frequent label
+        # - see the ratio between the number of points with the most frequent label and all the other points
+        # - compare different clustering methods
         for i,p in enumerate(planes):
             self.plot_pc(p['idx'])
         return True
-
+    def print_ar(self,a,nb):
+        values, base = np.histogram(a, bins=nb)
+        centers = [(base[i+1]+base[i])/2 for i in range(base.__len__()-1)]
+        s = ''
+        for i in range(values.__len__()):
+            s = s + '[{:.2f},{:.2f}]\n'.format(centers[i],values[i])
+        print(s)
     def find_floor(self):
-        n = self.normals[self.current_index]
-        n_tab = self.__mat2tab(n)
+        # n = self.normals[self.current_index]
+        # n_tab = self.__mat2tab(n)
+        nx = self.clustered_normals[self.current_index]['x']
+        ny = self.clustered_normals[self.current_index]['y']
+        nz = self.clustered_normals[self.current_index]['z']
+        phi = self.clustered_normals[self.current_index]['phi']
+        theta = self.clustered_normals[self.current_index]['theta']
+        # self.print_ar(phi,18)
+        # self.print_ar(theta,18)
+        # n_tab = np.hstack((np.reshape(nx,(nx.__len__(),1)),np.reshape(ny,(ny.__len__(),1)),np.reshape(nz,(nz.__len__(),1))))
+        c1 = [abs(nz[i]-1) for i in range(nz.__len__())]
+        c2 = [abs(nz[i]+1) for i in range(nz.__len__())]
+        c3 = [abs(phi[i]-90) for i in range(nz.__len__())]
+        c4 = [abs(theta[i]-90) for i in range(nz.__len__())]
+        c5 = [abs(phi[i]-270) for i in range(nz.__len__())]
+        c6 = [abs(theta[i]-270) for i in range(nz.__len__())]
+        # c3 = [abs(phi[i]-90) for i in range(nz.__len__())]
+        # c4 = [abs(theta[i]-90) for i in range(nz.__len__())]
+        t = 1
+        threshold1 = min(c1)*t
+        threshold2 = min(c2)*t
+        threshold3 = min(c3)*t
+        threshold4 = min(c4)*t
+        threshold5 = min(c5)*t
+        threshold6 = min(c6)*t
+        if threshold3>10*threshold5: threshold3 = threshold5
+        if threshold5>10*threshold3: threshold5 = threshold3
+        if threshold4>10*threshold6: threshold4 = threshold6
+        if threshold6>10*threshold4: threshold6 = threshold4
+        
+        print('t1:{:.2f},t2:{:.2f},t3:{:.2f},t4:{:.2f},t5:{:.2f},t6:{:.2f}'.format(threshold1[0],threshold2[0],threshold3[0], threshold4[0], threshold5[0], threshold6[0]))
         indexes = []
-        threshold = 0.1
+        cont_ang = 0
+        cont_lin = 0
         for i in range(0,self.W*self.H):
-            if np.linalg.norm(n_tab[i,:]-[0,0,1])<threshold:
-                indexes.append(i)
-            if np.linalg.norm(n_tab[i,:]-[0,0,-1])<threshold:
-                indexes.append(i)
-            
+            if c3[i] <= threshold3 or c4[i] <= threshold4 or c5[i] <= threshold5 or c6[i] <= threshold6:
+                # indexes.append(i)
+                cont_ang = cont_ang + 1
+                if c1[i] <= threshold1 or c2[i] <= threshold2:
+                    indexes.append(i)
+                    cont_lin = cont_lin + 1
+        print('ang:'+str(cont_ang)+'\nlin:'+str(cont_lin))
         return indexes
      
 
@@ -241,7 +295,84 @@ class plane_clustering:
                     normals[:,i,j] = norm / leng
         print('normals computed')
         self.valid = valid
-        return normals
+        return normals #self.normals[self.current_index]
+    
+    def quantize(self,vec,nbins):
+        print('vec in [{:.3f},{:.3f}]'.format(min(vec)[0],max(vec)[0]))
+        nbins = round(nbins)
+        vec = np.reshape(vec,(vec.__len__(),))
+        sorted_ind = np.argsort(vec)
+        sorted_vec = np.sort(vec)
+        res = np.zeros((vec.__len__(),1))
+        # values, base = np.histogram(sorted_vec, bins='rice')
+        values, base = np.histogram(sorted_vec, bins=nbins)
+        centers = [(base[i+1]+base[i])/2 for i in range(base.__len__()-1)]
+        cumulative = np.cumsum(values)
+        cumulative = [float(cumulative[i])/float(cumulative[cumulative.__len__()-1]) for i in range(cumulative.__len__())]
+        cumulative.reverse()
+        cumulative.append(0)
+        cumulative.reverse()
+        d_cumulative =  [(cumulative[i+1] - cumulative[i])/ (base[i+1]-base[i]) for i in range(cumulative.__len__()-1)]
+        cumulative.remove(0)
+        threshold = 1/(base[base.__len__()-1]-base[0])
+        # for i in range(d_cumulative.__len__()):
+        #     print("[{:.2f},{:.2f}], c:{:.3f}, cum:{:.3f}, d_cum:{:.3f}".format(base[i],base[i+1],centers[i],cumulative[i],d_cumulative[i]))
+        slow_growth_ind = [i for i,d in enumerate(d_cumulative) if d<threshold]
+        fast_growth_ind = [i for i,d in enumerate(d_cumulative) if d>=threshold]
+        # print('sgi:'+str(slow_growth_ind))
+        # print('fgi:'+str(fast_growth_ind))
+        s_from = 0
+        s_to = slow_growth_ind.__len__()-1
+        while s_from < slow_growth_ind.__len__():
+            s_to = s_from
+            while s_to+1<slow_growth_ind.__len__() and slow_growth_ind[s_to+1]<base.__len__() and slow_growth_ind[s_to+1]==slow_growth_ind[s_to]+1: s_to=s_to+1
+            inizio = base[slow_growth_ind[s_from]]
+            fine = base[slow_growth_ind[s_to]+1]
+            avg = (inizio + fine)/2.0
+            # print( 'sg:{:2.2f} -> {:.2f} => {:.2f}'.format(inizio,fine,avg))
+            for ind, el in enumerate(sorted_vec):
+                if el <= fine and el >= inizio:
+                    sorted_vec[ind] = avg
+                
+            s_from = s_to+1
+        for i, fgi in enumerate(fast_growth_ind):
+            inizio = base[fgi]
+            fine = base[fgi+1]
+            avg = (inizio + fine)/2.0
+            # print( 'fg:{:2.2f} -> {:.2f} => {:.2f}'.format(inizio,fine,avg))
+            for ind, el in enumerate(sorted_vec):
+                    if el <= fine and el >= inizio:
+                        sorted_vec[ind] = avg
+        for i,si in enumerate(sorted_ind):
+            res[si,0] = sorted_vec[i]
+        return res
+
+    
+    def cluster_normals(self):
+        from math import atan, pi
+
+        nx = self.__mat2tab(self.normals[self.current_index][0,:,:])
+        ny = self.__mat2tab(self.normals[self.current_index][1,:,:])
+        nz = self.__mat2tab(self.normals[self.current_index][2,:,:])
+        phi = np.zeros((nx.shape[0],1))
+        theta = np.zeros((nx.shape[0],1))
+        
+        for i in range(nx.__len__()):
+            if nx[i]>0:
+                phi[i] = atan(nz[i]/nx[i])*180/pi+180*(nx[i]<0)
+                phi[i] = phi[i] +360*(phi[i]<0)
+            if ny[i]>0:
+                theta[i] = atan(nz[i]/ny[i])*180/pi+180*(ny[i]<0)
+                theta[i] = theta[i] +360*(theta[i]<0)
+        # print('phi in [{:.3f},{:.3f}], theta in [{:.3f},{:.3f}]'.format(min(phi)[0],max(phi)[0],min(theta)[0],max(theta)[0]))
+        levels_lin = 32
+        levels_deg = 36
+        qnx = self.quantize(nx,levels_lin)
+        qny = self.quantize(ny,levels_lin)
+        qnz = self.quantize(nz,levels_lin)
+        qphi = self.quantize(phi,levels_deg)
+        qtheta = self.quantize(theta,levels_deg)
+        return {'x': qnx, 'y': qny, 'z': qnz, 'phi':qphi, 'theta': theta}
 
     def run_kmeans(self):
         label_im = self.label
