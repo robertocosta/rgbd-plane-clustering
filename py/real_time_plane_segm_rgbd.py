@@ -55,75 +55,26 @@ class plane_clustering:
         print('Image '+str(self.current_index+1)+' of '+str(self.n)+' loaded successfully')
         self.normals.insert(self.current_index,self.compute_normals())
         self.clustered_normals.insert(self.current_index,self.cluster_normals())
-        #self.normals.append(self.compute_normals())
-        # self.n_labels = 8
-        # self.clusters.insert(self.current_index,self.run_kmeans())
-        # curr_cluster = self.clusters[self.current_index]
-        #print(str(curr_cluster['normcolor'/all/xyz/color/normals]['centroid'/label]))
 
-        plt.imshow(self.image, interpolation='nearest')
-
-
-        # labtab = self.__mat2tab(curr_cluster['normals']['label'])
-        # normtab = self.__mat2tab(self.normals[self.current_index])
-        # for j in range(0,self.n_labels):
-        #     labelj = []
-        #     for i in range(0,self.H*self.W):
-        #         if labtab[i]==j:
-        #             labelj.append(i)
-        #     print('label '+str(j))
-        #     print(str(normtab[labelj,:]))
-        #     print(str(np.mean(normtab[labelj,:],0)))
-        #     self.plot_pc(labelj)
 
         pc_tab = self.__mat2tab(self.point_cloud)
         floors_idx = self.find_floor()
-        pc_floors = pc_tab[floors_idx,:]
+        # pc_floors = pc_tab[floors_idx,:]
 
-        self.plot_pc(floors_idx)
-        # http://scikit-learn.org/stable/modules/generated/sklearn.mixture.BayesianGaussianMixture.html
-        import sklearn.mixture as skm
-        bgm = skm.BayesianGaussianMixture(n_components=50,covariance_type='full',tol=1e-3,reg_covar=1e-6, 
-        max_iter=200,n_init=2,init_params='kmeans',weight_concentration_prior_type='dirichlet_process',
-        weight_concentration_prior=None,mean_precision_prior=None,mean_prior=None,degrees_of_freedom_prior=None,
-        covariance_prior=None,random_state=None,warm_start=False,verbose=0,verbose_interval=10)
-        #bgm.fit(floors, self.__mat2tab(self.label))
-        bgm.fit(pc_floors)
-        predicted = bgm.predict(pc_floors)
-        planes = []
-        for k in range(np.min(predicted),np.max(predicted)+1):
-            klabel = [i for i,j in enumerate(predicted) if j==k]
-            if (klabel.__len__()>10):
-                print('n. of points: '+str(klabel.__len__()))
-                idx = [floors_idx[kk] for kk in klabel]
-                plane_coeff = self.__find_plane(pc_tab[idx,:])
-                planes.append({'eq':plane_coeff,'idx':idx})
-                print('[a,b,c,d]='+str(plane_coeff))
-        min_plane_dist = 0.1
-        for i,p1 in enumerate(planes):
-            for j,p2 in enumerate(planes):
-                if j>i:
-                    # print('comparing '+str(i)+','+str(j))
-                    d1 = abs(p1['eq'][3])/np.sqrt(p1['eq'][0]**2+p1['eq'][1]**2+p1['eq'][2]**2)
-                    d2 = abs(p2['eq'][3])/np.sqrt(p2['eq'][0]**2+p2['eq'][1]**2+p2['eq'][2]**2)
-                    # if np.linalg.norm(p1['eq']-p2['eq'])<min_plane_dist:
-                    if (abs(d1-d2)<min_plane_dist):
-                        # distance between 2 planes (take point (1,1,z2))
-                        d12 = abs(p1['eq'][0]+p1['eq'][1]+p1['eq'][2]*(-(p2['eq'][0]+p2['eq'][1]+p2['eq'][3])/p2['eq'][2])+p1['eq'][3])/np.sqrt(p1['eq'][0]**2+p1['eq'][1]**2+p1['eq'][2]**2)
-                        if d12<min(d1,d2):
-                            print('merging '+str(i)+','+str(j))
-                            if p1['idx'].__len__()>p2['idx'].__len__():
-                                p1['idx'] = np.hstack((p1['idx'],p2['idx']))
-                                planes.__delitem__(j)
-                                print('distance of plane '+str(i)+' from origin: '+str(d1))
-                                print('distance of plane '+str(j)+' from origin: '+str(d2))
-                            else:
-                                p2['idx'] = np.hstack((p2['idx'],p1['idx']))
-                                planes.__delitem__(i)
-                                print('distance of plane '+str(i)+' from origin: '+str(d1))
-                                print('distance of plane '+str(j)+' from origin: '+str(d2))
-                        else:
-                            print('escluso')
+        
+        planes = self.unsup_cluster(floors_idx)
+        min_plane_dist = 0.01
+        # pc_dist: {'01':d01, '02': d02, ... }
+        # mean_dist =  [ [0,            mean(d_01), mean(d_02), mean(d_03), ... ],
+        #                [mean(d_10),   0,          mean(d_12), mean(d_13), ... ],
+        #                [ ...                                                  ] ]
+        # dev_dist  =  [ [0,             std(d_01),  std(d_02),  std(d_03), ... ],
+        #                [ std(d_10),   0,           std(d_12),  std(d_13), ... ],
+        #                [ ...                                                  ] ]
+        pc_dist, mean_dist, dev_dist = self.plane_distances(planes)
+        
+        self.merge_planes(planes,pc_dist,mean_dist,dev_dist)
+
         #print(str(planes))
         # quantization of the 3 components of the normals
         # mapping 3D normals into phi,theta space (n_x / n_z, n_y / n_z)
@@ -133,16 +84,146 @@ class plane_clustering:
         # - take the most frequent label
         # - see the ratio between the number of points with the most frequent label and all the other points
         # - compare different clustering methods
+        plt.imshow(self.image, interpolation='nearest')
+        self.plot_pc(floors_idx)
         for i,p in enumerate(planes):
-            self.plot_pc(p['idx'])
+            # print('mean dist: {:.5f}'.format(p['dist']))
+            idx =p['idx']
+            if idx.__len__()>0:
+                p = self.plot_pc(idx)
+            
+
         return True
-    def print_ar(self,a,nb):
-        values, base = np.histogram(a, bins=nb)
-        centers = [(base[i+1]+base[i])/2 for i in range(base.__len__()-1)]
-        s = ''
-        for i in range(values.__len__()):
-            s = s + '[{:.2f},{:.2f}]\n'.format(centers[i],values[i])
-        print(s)
+
+    def point_plane_dist(self,points_idx,plane):
+        pc_tab = self.__mat2tab(self.point_cloud)
+        le = points_idx.__len__()
+        pc_plane = np.reshape(pc_tab[points_idx,:],(le,3))
+        PC_plane = np.hstack((pc_plane,np.ones((le,1))))
+        tmp = np.dot(PC_plane,np.reshape(plane,(4,1)))
+        distances = [abs(tmp[i])/np.sqrt(plane[0]**2+plane[1]**2+plane[2]**2) for i in range(le)]
+        return distances
+
+    def plane_distances(self,planes):
+        pc_dist = {}
+        mean_dist = np.zeros((planes.__len__(),planes.__len__()))
+        dev_dist = np.zeros((planes.__len__(),planes.__len__()))
+        for i,p1 in enumerate(planes):
+            idx = p1['idx']
+            le = idx.__len__()
+            for j,p2 in enumerate(planes):
+                plane_coeff = p2['eq']
+                distances = self.point_plane_dist(idx,plane_coeff)
+                # sq_distances = [distances[i]**2 for i in range(distances.__len__())]
+                pc_dist[str(i)+str(j)] = distances
+                mean_dist[i,j] = np.mean(distances)
+                dev_dist[i,j] = np.std(distances)
+                # print('d['+str(i)+','+str(j)+']: {:2.2E} +- {:2.2E}'.format(mean_dist[i,j],dev_dist[i,j]))
+        return pc_dist, mean_dist, dev_dist
+
+    def unsup_cluster(self,data_idx):
+        # http://scikit-learn.org/stable/modules/generated/sklearn.mixture.BayesianGaussianMixture.html
+        max_mean_dist = 0.001
+        max_sum_xy = 0.2
+        min_n_p = round(data_idx.__len__()/50)
+        pc_tab = self.__mat2tab(self.point_cloud)
+        data = pc_tab[data_idx,:]
+        import sklearn.mixture as skm
+        bgm = skm.BayesianGaussianMixture(n_components=50,covariance_type='full',tol=1e-3,reg_covar=1e-6, 
+        max_iter=200,n_init=2,init_params='kmeans',weight_concentration_prior_type='dirichlet_process',
+        weight_concentration_prior=None,mean_precision_prior=None,mean_prior=None,degrees_of_freedom_prior=None,
+        covariance_prior=None,random_state=None,warm_start=False,verbose=0,verbose_interval=10)
+        #bgm.fit(floors, self.__mat2tab(self.label))
+        bgm.fit(data)
+        predicted = bgm.predict(data)
+        planes = []
+        for k in range(np.min(predicted),np.max(predicted)+1):
+            klabel = [i for i,j in enumerate(predicted) if j==k]
+            if (klabel.__len__()>10):
+                # print('n. of points: '+str(klabel.__len__()))
+                idx = [data_idx[kk] for kk in klabel]
+                le = idx.__len__()
+                plane_coeff = self.__find_plane(pc_tab[idx,:])
+                distances = self.point_plane_dist(idx,plane_coeff)
+                sq_distances = [distances[i]**2 for i in range(distances.__len__())]
+                mean_dist = np.mean(sq_distances)
+                if (mean_dist<max_mean_dist and le>min_n_p and abs(plane_coeff[0])+abs(plane_coeff[1])<max_sum_xy):
+                    planes.append({'dist':mean_dist,'eq':plane_coeff,'idx':idx})
+                    print('[a,b,c,d]=[{0[0]:.2f},{0[1]:.2f},{0[2]:.2f},{0[3]:.2f}]; '.format(plane_coeff)+str(le)+' points; '+'dist: {:2.2E}'.format(mean_dist))
+        return planes
+
+    def __merge(self,planes,tab,pc_dist,mean_dist):
+        conf = 0.01
+        for j in range(tab.shape[1]):
+            a = [k for k in range(tab.shape[0]) if tab[k,j]==True]
+            p2 = planes[j]
+            idx2 = p2['idx']
+            if a.__len__()>0:
+                print('merging '+str(a) + ' to '+str(j))
+            for ind in range(a.__len__()):
+                i = a[ind]
+                p1 = planes[i]
+                idx1 = p1['idx']
+                le1 = idx1.__len__()
+                distances = pc_dist[str(i)+str(j)]
+                # print('dist_len = {:d}, idx1_len = {:d}, idx2_len = {:d}'.format(distances.__len__(),idx1.__len__(),idx2.__len__()))
+                to_be_merged = [idx1[k] for k in range(le1) if distances[k]<=mean_dist[i,j]+conf]
+                if (to_be_merged.__len__()>0):
+                    p2['idx'] = np.hstack((idx2,to_be_merged))
+                    
+                    print('merging '+str(i)+'->'+str(j)+'. d={:.2e}; {:d}/{:d} points added'.format(mean_dist[i,j],to_be_merged.__len__(),le1))
+            # re computing distances
+            for ii in range(planes.__len__()):
+                if not ii==j:
+                    pc_dist[str(j)+str(ii)] = self.point_plane_dist(p2['idx'],planes[ii]['eq'])
+        # to_be_deleted = 0
+        # to_be_deleted_ind = []
+        # for i in range(tab.shape[0]):
+        #     tmp = [k for k in range(tab.shape[1]) if tab[i,k]==True]
+        #     if tmp.__len__()>0:
+        #         to_be_deleted = to_be_deleted + 1
+        #         to_be_deleted_ind.append(i)
+        
+        # n_el = [planes[i].__len__() for i in range(planes.__len__())]
+        # ord_n_el = np.sort(n_el)
+        # sum_el = np.cumsum(ord_n_el)
+        # sum_el = [sum_el[i]/sum_el[sum_el.__len__()-1] for i in range(sum_el.__len__())]
+        
+        # indexes = np.argsort(n_el)
+        # to_keep = [sum_el[i] for i in range(sum_el.__len__()) if sum_el[i]>0.15]
+        # to_be_deleted = n_el.__len__()-to_keep.__len__()
+        # indexes = [indexes[i] for i in range(to_be_deleted)]
+
+        # deleted = 0
+        # for i in range(indexes.__len__()):
+        #     if tmp.__len__()>0:
+        #         planes.__delitem__(indexes[i]-deleted)
+        #         deleted = deleted + 1            
+
+    def merge_planes(self,planes,pc_dist,mean_dist,dev_dist):
+        plane_union_threshold = 0.05
+        tab = np.tile(np.array(False), [planes.__len__(),planes.__len__()])
+        for i,p1 in enumerate(planes):
+            plane_coeff = p1['eq']
+            d1 = abs(p1['eq'][3])/np.sqrt(p1['eq'][0]**2+p1['eq'][1]**2+p1['eq'][2]**2)
+            p1['d_from_origin'] = d1
+            for j,p2 in enumerate(planes):
+                if (j>i):
+                    c1 = mean_dist[i,j]+dev_dist[i,j]-plane_union_threshold
+                    c2 = mean_dist[j,i]+dev_dist[j,i]-plane_union_threshold
+                    if (c1<0) or (c2<0):
+                        if (c1*c2<0): # only one condition is true
+                            if (c1<0): # points of p1 are close enough to p2
+                                tab[i,j] = True
+                            else: # points of p2 are close enough to p1
+                                tab[j,i] = True
+                        else:
+                            if (mean_dist[i,j]<mean_dist[j,i]):
+                                tab[i,j] = True
+                            else: # points of p2 are close enough to p1
+                                tab[j,i] = True
+        self.__merge(planes,tab,pc_dist,mean_dist)
+
     def find_floor(self):
         # n = self.normals[self.current_index]
         # n_tab = self.__mat2tab(n)
@@ -151,43 +232,30 @@ class plane_clustering:
         nz = self.clustered_normals[self.current_index]['z']
         phi = self.clustered_normals[self.current_index]['phi']
         theta = self.clustered_normals[self.current_index]['theta']
-        # self.print_ar(phi,18)
-        # self.print_ar(theta,18)
         # n_tab = np.hstack((np.reshape(nx,(nx.__len__(),1)),np.reshape(ny,(ny.__len__(),1)),np.reshape(nz,(nz.__len__(),1))))
-        c1 = [abs(nz[i]-1) for i in range(nz.__len__())]
-        c2 = [abs(nz[i]+1) for i in range(nz.__len__())]
-        c3 = [abs(phi[i]-90) for i in range(nz.__len__())]
-        c4 = [abs(theta[i]-90) for i in range(nz.__len__())]
-        c5 = [abs(phi[i]-270) for i in range(nz.__len__())]
-        c6 = [abs(theta[i]-270) for i in range(nz.__len__())]
-        # c3 = [abs(phi[i]-90) for i in range(nz.__len__())]
-        # c4 = [abs(theta[i]-90) for i in range(nz.__len__())]
-        t = 1
+        c1 = [abs(abs(nz[i])-1) for i in range(nz.__len__())]
+        c3 = [abs(abs(phi[i])-90) for i in range(nz.__len__())]
+        c5 = [abs(abs(phi[i])-270) for i in range(nz.__len__())]
+
+        t = 1.05
         threshold1 = min(c1)*t
-        threshold2 = min(c2)*t
         threshold3 = min(c3)*t
-        threshold4 = min(c4)*t
         threshold5 = min(c5)*t
-        threshold6 = min(c6)*t
-        if threshold3>10*threshold5: threshold3 = threshold5
-        if threshold5>10*threshold3: threshold5 = threshold3
-        if threshold4>10*threshold6: threshold4 = threshold6
-        if threshold6>10*threshold4: threshold6 = threshold4
         
-        print('t1:{:.2f},t2:{:.2f},t3:{:.2f},t4:{:.2f},t5:{:.2f},t6:{:.2f}'.format(threshold1[0],threshold2[0],threshold3[0], threshold4[0], threshold5[0], threshold6[0]))
+        print('t1:{:.2f},t3:{:.2f},t5:{:.2f}'.format(threshold1[0],threshold3[0], threshold5[0]))
         indexes = []
         cont_ang = 0
         cont_lin = 0
         for i in range(0,self.W*self.H):
-            if c3[i] <= threshold3 or c4[i] <= threshold4 or c5[i] <= threshold5 or c6[i] <= threshold6:
+            if c3[i] <= threshold3 or c5[i] <= threshold5:
                 # indexes.append(i)
                 cont_ang = cont_ang + 1
-                if c1[i] <= threshold1 or c2[i] <= threshold2:
+                if c1[i] <= threshold1:
                     indexes.append(i)
                     cont_lin = cont_lin + 1
         print('ang:'+str(cont_ang)+'\nlin:'+str(cont_lin))
         return indexes
-     
+
 
     def plot_pc(self,plane_idx):
         point_size = 0.1
@@ -207,7 +275,7 @@ class plane_clustering:
         # norm_tab[plane_idx, 0],norm_tab[plane_idx, 1],norm_tab[plane_idx, 2], lw=line_width)
         plt.draw()
         plt.show()
-        return plt
+        return {'ax':ax, 'fig': fig, 'plt':plt}
 
     def show(self):
         line_width = 0.4
@@ -298,7 +366,7 @@ class plane_clustering:
         return normals #self.normals[self.current_index]
     
     def quantize(self,vec,nbins):
-        print('vec in [{:.3f},{:.3f}]'.format(min(vec)[0],max(vec)[0]))
+        # print('vec in [{:.1f},{:.1f}]'.format(min(vec)[0],max(vec)[0]))
         nbins = round(nbins)
         vec = np.reshape(vec,(vec.__len__(),))
         sorted_ind = np.argsort(vec)
@@ -333,7 +401,7 @@ class plane_clustering:
             for ind, el in enumerate(sorted_vec):
                 if el <= fine and el >= inizio:
                     sorted_vec[ind] = avg
-                
+
             s_from = s_to+1
         for i, fgi in enumerate(fast_growth_ind):
             inizio = base[fgi]
@@ -376,14 +444,11 @@ class plane_clustering:
 
     def run_kmeans(self):
         label_im = self.label
-
         all_in = np.zeros((self.H*self.W,9))
         all_in[:,0:3] = self.__mat2tab(color.rgb2lab(self.image))
         all_in[:,3:6] = self.__mat2tab(self.normals[self.current_index])
         all_in[:,6:9] = self.__mat2tab(self.point_cloud)
-        
         whitened = whiten(all_in)
-
         groups = {}
         n_labels = self.n_labels
         centroidc, labelc = kmeans2(all_in[:,0:3],n_labels,iter=10, thresh=1e-05, minit='random', missing='warn', check_finite=True)
