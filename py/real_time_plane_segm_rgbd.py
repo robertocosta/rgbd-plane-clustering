@@ -216,7 +216,7 @@ class plane_clustering:
         for i in range(1,H-1):
             for j in range(1,W-1):
                 left = self.point_cloud[:,i,j-1]
-                right = self.point_cloud[:,i,j]
+                right = self.point_cloud[:,i,j+1]
                 up = self.point_cloud[:,i-1,j-1]
                 down = self.point_cloud[:,i+1,j]
                 tang_x[:,i,j] = right - left
@@ -589,7 +589,7 @@ class plane_clustering:
         # print('a,b,c,d (svd):\n'+str(plane_coeff_2))
         return plane_coeff
 
-    def str2num(s):
+    def str2num(self,s):
         try:
             return int(s)
         except ValueError:
