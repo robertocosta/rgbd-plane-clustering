@@ -42,7 +42,7 @@ for i=1:length(scenes)
         subplot(223); imagesc(inst); colorbar; axis image; title('Inst');
         subplot(224); imagesc(lab); colorbar; axis image; title('Labels');
     end
-    
+    %% reprojection
     [rgb_depth, rgb_undist, pc] = project_depth_map(depth, rgb);
     
     if glob.verbose
@@ -59,15 +59,21 @@ for i=1:length(scenes)
         scatter3(pc(:,1),pc(:,3),pc(:,2),0.1,c);
         title('Point cloud'); xlabel('x'), ylabel('z'); zlabel('y');
     end
+    %% normals computation
     glob.H = size(rgb,1);
     glob.W = size(rgb,2);   
+    % set window size in normals computation
     glob.wx = 25;
     glob.wy = 25;
+    % compute normals
     N = compute_normals(pc);
+    % normalize normals
     N2 = sqrt(N(:,:,1).^2+N(:,:,2).^2+N(:,:,3).^2);
     n = cat(3,N(:,:,1)./N2,N(:,:,2)./N2,N(:,:,3)./N2);
     n(N2==0) = 0;
+    % cartesian coordinates to spherical coordinates
     phiTh = cart2phiTheta(n);
+    % plots
     if glob.verbose
         set(0, 'currentfigure', f5);
         subplot(221);imagesc(n(:,:,1));title('nx');colorbar;axis image;
@@ -78,14 +84,19 @@ for i=1:length(scenes)
         subplot(121);imagesc(phiTh(:,:,1));title('Phi');colorbar;axis image;
         subplot(122);imagesc(phiTh(:,:,2));title('Theta');colorbar;axis image;
     end
-    glob.quantizationLevels = -.75:0.5:.75;
-    qnx = quantization(n(:,:,1));
-    qny = quantization(n(:,:,2));
-    qnz = quantization(n(:,:,3));
-    glob.quantizationLevels = -pi/2+pi/8:pi/4:pi/2-pi/8;
-    qphi = quantization(phiTh(:,:,1)); % in [-pi,pi]
-    glob.quantizationLevels = -pi/4+pi/16:pi/8:pi/4-pi/16;
-    qtheta = quantization(phiTh(:,:,2));
+    %% quantization 
+    % quantization of the normals in the cartesian space
+    % 9 levels: [-1, -0.7, -0.5, -0.3, -0.1, 0.1 0.3, 0.5, 0.7, 1]
+    qLevelCart = -.7:0.2:.7;
+    qnx = quantization(n(:,:,1),qLevelCart);
+    qny = quantization(n(:,:,2),qLevelCart);
+    qnz = quantization(n(:,:,3),qLevelCart);
+    % quantization of the normals in the phi-theta space
+    q = 9;
+    qLevelPhi = -pi/2+pi/((q-1)*2):pi/(q-1):pi/2-pi/((q-1)*2);
+    qphi = quantization(phiTh(:,:,1),qLevelPhi); % in [-pi,pi]
+    qLevelTh = -pi/4+pi/((q-1)*4):pi/((q-1)*2):pi/4-pi/((q-1)*4);
+    qtheta = quantization(phiTh(:,:,2),qLevelTh);
     
     if glob.verbose
         set(0, 'currentfigure', f7);
@@ -97,17 +108,39 @@ for i=1:length(scenes)
         subplot(122);imshow(label2rgb(qtheta));title('Quantized theta');
     end
     
+    %% initial clusters
+    labCart = zeros((length(qLevelCart)+1)^3,3);
+    initialClustersCart = cell((length(qLevelCart)+1)^3,1);
+    ind = 1;
+    for ii=1:length(qLevelCart)+1
+        for j=1:length(qLevelCart)+1
+            for k=1:length(qLevelCart)+1
+                labCart(ind,:) = [ii,j,k];
+                initialClustersCart{ind} = intersect(find(qnx==ii),...
+                    intersect(find(qny==j),find(qnz==k)));
+                ind = ind + 1;
+            end
+        end
+    end
+    
+    labSph = zeros((length(qLevelPhi)+1)*(length(qLevelTh)+1),2);
+    initialClustersSph = cell((length(qLevelPhi)+1)*(length(qLevelTh)+1),1);
+    ind = 1;
+    for ii=1:length(qLevelPhi)+1
+        for j=1:length(qLevelTh)+1
+            labSph(ind,:) = [ii,j];
+            initialClustersSph{ind} = intersect(...
+                find(qphi==ii),find(qtheta==j));
+            ind = ind + 1;
+        end
+    end
     
     %{
     To Do:
-    - associate at each non empty cell in the voxel grid (triplets of
-    quantization labels for cartesian space, pairs of labels for spherical)
-    the set of indexes of the normals which get mapped there (initial
-    clusters)
     - examine the neighborhood in the grid of each initial cluster and
     merge the cluster in which the average (non-quantized) normal
-    orientation falls below a threshold (sqrt(3)?)
-    - keeping track of the merges done
+    orientation falls below a threshold
+    - keeping track of the merges done and merge close clusters
     - cluster the points in each cluster w.r.t. the distances of each point
     from the origin
     - (?) train supervised learning algorithm
