@@ -94,9 +94,9 @@ for i=1:length(scenes)
     % quantization of the normals in the phi-theta space
     q = 9;
     qLevelPhi = -pi/2+pi/((q-1)*2):pi/(q-1):pi/2-pi/((q-1)*2);
-    qphi = quantization(phiTh(:,:,1),qLevelPhi); % in [-pi,pi]
-    qLevelTh = -pi/4+pi/((q-1)*4):pi/((q-1)*2):pi/4-pi/((q-1)*4);
-    qtheta = quantization(phiTh(:,:,2),qLevelTh);
+    qphi = quantization(phiTh(:,:,1),qLevelPhi); % in [-pi/2,pi/2]
+    qLevelTh = -pi/2+pi/((q-1)*2):pi/(q-1):pi/2-pi/((q-1)*2);
+    qtheta = quantization(phiTh(:,:,2),qLevelTh); % in [-pi/2,pi/2]
     
     if glob.verbose
         set(0, 'currentfigure', f7);
