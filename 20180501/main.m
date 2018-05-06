@@ -1,16 +1,17 @@
-close all;
+close all; restoredefaultpath;
+clearvars RESTOREDEFAULTPATH_EXECUTED;
 global glob;
 glob.reloadDataset = false;
 if glob.reloadDataset
     clear all;
-    load('mat\ds50.mat');
+    load('..\mat\ds50.mat');
 else
     vars = {'accelData','depths','rawDepths','images','instances',...
         'labels','names','namesToIds','sceneTypes','scenes','glob'};
     clearvars('-except', vars{:});
 end
 
-glob.verbose = true;
+glob.verbose = false;
 if glob.verbose
     f1 = figure;
     set(f1,'Position',[10,40,800,500]);
@@ -87,16 +88,18 @@ for i=1:length(scenes)
     %% quantization 
     % quantization of the normals in the cartesian space
     % 9 levels: [-1, -0.7, -0.5, -0.3, -0.1, 0.1 0.3, 0.5, 0.7, 1]
-    qLevelCart = -.7:0.2:.7;
-    qnx = quantization(n(:,:,1),qLevelCart);
-    qny = quantization(n(:,:,2),qLevelCart);
-    qnz = quantization(n(:,:,3),qLevelCart);
+    nLevelsCart = 8;
+    from = -1;
+    to = 1;
+    qnx = quantization(n(:,:,1),from,to,nLevelsCart);
+    qny = quantization(n(:,:,2),from,to,nLevelsCart);
+    qnz = quantization(n(:,:,3),from,to,nLevelsCart);
     % quantization of the normals in the phi-theta space
-    q = 9;
-    qLevelPhi = -pi/2+pi/((q-1)*2):pi/(q-1):pi/2-pi/((q-1)*2);
-    qphi = quantization(phiTh(:,:,1),qLevelPhi); % in [-pi/2,pi/2]
-    qLevelTh = -pi/2+pi/((q-1)*2):pi/(q-1):pi/2-pi/((q-1)*2);
-    qtheta = quantization(phiTh(:,:,2),qLevelTh); % in [-pi/2,pi/2]
+    nLevelsSph = 12;
+    from = -pi/2;
+    to = pi/2;
+    qphi = quantization(phiTh(:,:,1),from*2,to*2,nLevelsSph);
+    qtheta = quantization(phiTh(:,:,2),from,to,nLevelsSph);
     
     if glob.verbose
         set(0, 'currentfigure', f7);
@@ -109,12 +112,12 @@ for i=1:length(scenes)
     end
     
     %% initial clusters
-    labCart = zeros((length(qLevelCart)+1)^3,3);
-    initialClustersCart = cell((length(qLevelCart)+1)^3,1);
+    labCart = zeros(nLevelsCart^3,3);
+    initialClustersCart = cell(nLevelsCart^3,1);
     ind = 1;
-    for ii=1:length(qLevelCart)+1
-        for j=1:length(qLevelCart)+1
-            for k=1:length(qLevelCart)+1
+    for ii=1:nLevelsCart
+        for j=1:nLevelsCart
+            for k=1:nLevelsCart
                 labCart(ind,:) = [ii,j,k];
                 initialClustersCart{ind} = intersect(find(qnx==ii),...
                     intersect(find(qny==j),find(qnz==k)));
@@ -123,11 +126,11 @@ for i=1:length(scenes)
         end
     end
     
-    labSph = zeros((length(qLevelPhi)+1)*(length(qLevelTh)+1),2);
-    initialClustersSph = cell((length(qLevelPhi)+1)*(length(qLevelTh)+1),1);
+    labSph = zeros(nLevelsSph^2,2);
+    initialClustersSph = cell(nLevelsSph^2,1);
     ind = 1;
-    for ii=1:length(qLevelPhi)+1
-        for j=1:length(qLevelTh)+1
+    for ii=1:nLevelsSph
+        for j=1:nLevelsSph
             labSph(ind,:) = [ii,j];
             initialClustersSph{ind} = intersect(...
                 find(qphi==ii),find(qtheta==j));

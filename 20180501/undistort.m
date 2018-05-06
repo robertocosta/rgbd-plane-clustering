@@ -21,41 +21,42 @@ end
 function [Irec] = rect(I,R,f,c,k,alpha,KK_new)
 
 
-  if nargin < 5,
+  if nargin < 5
      k = [0;0;0;0;0];
-     if nargin < 4,
+     if nargin < 4
         c = [0;0];
-        if nargin < 3,
+        if nargin < 3
            f = [1;1];
-           if nargin < 2,
+           if nargin < 2
               R = eye(3);
-              if nargin < 1,
+              if nargin < 1
                  error('ERROR: Need an image to rectify');
-              end;
-           end;
-        end;
-     end;
-  end;
+              end
+           end
+        end
+     end
+  end
 
 
-  if nargin < 7,
-     if nargin < 6,
+  if nargin < 7
+     if nargin < 6
       KK_new = [f(1) 0 c(1);0 f(2) c(2);0 0 1];
      else
       KK_new = alpha; % the 6th argument is actually KK_new   
-     end;
+     end
      alpha = 0;
-  end;
+  end
 
 
-
-  % Note: R is the motion of the points in space
-  % So: X2 = R*X where X: coord in the old reference frame, X2: coord in the new ref frame.
-
-
-  if ~exist('KK_new'),
+%{
+   Note: R is the motion of the points in space
+   So: X2 = R*X where 
+    X: coord in the old reference frame, 
+    X2: coord in the new ref frame.
+%}
+  if ~exist('KK_new','var')
      KK_new = [f(1) alpha*f(1) c(1);0 f(2) c(2);0 0 1];
-  end;
+  end
 
 
   [nr,nc] = size(I);
@@ -66,7 +67,7 @@ function [Irec] = rect(I,R,f,c,k,alpha,KK_new)
   px = reshape(mx',nc*nr,1);
   py = reshape(my',nc*nr,1);
 
-  rays = inv(KK_new)*[(px - 1)';(py - 1)';ones(1,length(px))];
+  rays = KK_new\[(px - 1)';(py - 1)';ones(1,length(px))];
 
 
   % Rotation: (or affine transformation):
@@ -93,7 +94,8 @@ function [Irec] = rect(I,R,f,c,k,alpha,KK_new)
   py_0 = floor(py2);
   py_1 = py_0 + 1;
 
-  good_points = find((px_0 >= 0) & (px_0 <= (nc-2)) & (py_0 >= 0) & (py_0 <= (nr-2)));
+  good_points = find((px_0 >= 0) & (px_0 <= (nc-2)) & ...
+      (py_0 >= 0) & (py_0 <= (nr-2)));
 
   px2 = px2(good_points);
   py2 = py2(good_points);
@@ -115,7 +117,6 @@ function [Irec] = rect(I,R,f,c,k,alpha,KK_new)
 
   ind_new = (px(good_points)-1)*nr + py(good_points);
 
-
-
-  Irec(ind_new) = a1 .* I(ind_lu) + a2 .* I(ind_ru) + a3 .* I(ind_ld) + a4 .* I(ind_rd);
+  Irec(ind_new) = a1 .* I(ind_lu) + a2 .* I(ind_ru) + ...
+      a3 .* I(ind_ld) + a4 .* I(ind_rd);
 end
