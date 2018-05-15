@@ -1,9 +1,10 @@
 close all; restoredefaultpath;
 clearvars RESTOREDEFAULTPATH_EXECUTED;
+delete(gcp('nocreate'))
 global glob;
 glob.reloadDataset = false;
 if glob.reloadDataset
-    clear all;
+    clearvars('-except', 'glob');
     load('..\mat\ds50.mat');
 else
     vars = {'accelData','depths','rawDepths','images','instances',...
@@ -11,7 +12,7 @@ else
     clearvars('-except', vars{:});
 end
 
-glob.verbose = false;
+glob.verbose = true;
 if glob.verbose
     f1 = figure;
     set(f1,'Position',[10,40,800,500]);
@@ -29,8 +30,14 @@ if glob.verbose
     set(f7,'Position',[1400,400,1300,500]);
     f8 = figure;
     set(f8,'Position',[10,40,800,500]);
+    f9 = figure;
+    set(f9,'Position',[10,40,800,500]);
+    f10 = figure;
+    set(f10,'Position',[10,40,800,500]);
+    
+     
 end
-
+pool = parpool;
 for i=1:length(scenes)
     depth = depths(:,:,i);
     rgb = images(:,:,:,i);
@@ -70,8 +77,8 @@ for i=1:length(scenes)
     N = compute_normals(pc);
     % normalize normals
     N2 = sqrt(N(:,:,1).^2+N(:,:,2).^2+N(:,:,3).^2);
+    N2(N2==0) = inf;
     n = cat(3,N(:,:,1)./N2,N(:,:,2)./N2,N(:,:,3)./N2);
-    n(N2==0) = 0;
     % cartesian coordinates to spherical coordinates
     phiTh = cart2phiTheta(n);
     % plots
@@ -84,6 +91,34 @@ for i=1:length(scenes)
         set(0, 'currentfigure', f6);
         subplot(121);imagesc(phiTh(:,:,1));title('Phi');colorbar;axis image;
         subplot(122);imagesc(phiTh(:,:,2));title('Theta');colorbar;axis image;
+    end
+    %% clustering with kmeans
+    nx = n(:,:,1);
+    ny = n(:,:,2);
+    nz = n(:,:,3);
+    nTab = [nx(:),ny(:),nz(:)];
+    phi = phiTh(:,:,1);
+    theta = phiTh(:,:,2);
+    nTabSph = [phi(:),theta(:)];
+    
+    stream = RandStream('mlfg6331_64');
+    options = statset('UseParallel',1,'UseSubstreams',1,'Streams',stream);
+    [idxCart, ~, ~,~] = kmeans(nTab,12,'Options',options,'MaxIter',10000,...
+        'Display','final','Replicates',5,'EmptyAction','drop',...
+        'OnlinePhase','on');
+    
+    [idxSph, ~, ~,~] = kmeans(nTabSph,12,'Options',options,'MaxIter',10000,...
+        'Display','final','Replicates',5,'EmptyAction','drop',...
+        'OnlinePhase','on');
+    
+    if glob.verbose
+        set(0, 'currentfigure', f9);
+        idxIm = reshape(idxCart,size(n,1),size(n,2));
+        imshow(label2rgb(idxIm));title('K-means labels - cart');
+        pause(0.1);
+        set(0, 'currentfigure', f10);
+        idxIm = reshape(idxSph,size(n,1),size(n,2));
+        imshow(label2rgb(idxIm));title('K-means labels - sph');
     end
     %% quantization 
     % quantization of the normals in the cartesian space
