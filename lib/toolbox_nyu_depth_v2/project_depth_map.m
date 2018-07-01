@@ -48,13 +48,20 @@ function [depthOut, rgbUndistorted] = project_depth_map(imgDepth, rgb)
   imgDepth = undistort_depth(double(imgDepth),fc_d,cc_d,kc_d,0, noiseMask);
 
   % Fix issues introduced by distortion.
-  imgDepth(imgDepth < 600) = 2047;
-  imgDepth(noiseMask) = 2047;
+%   imgDepth(imgDepth < 600) = 2047;
+%   imgDepth(noiseMask) = 2047;
 
-  depth2 = depth_rel2depth_abs(imgDepth);
+%   depth2 = depth_rel2depth_abs(imgDepth);
+    depth2 = imgDepth;
   points3d = depth_plane2depth_world(depth2);
   points3d = depth_world2rgb_world(points3d);
   
+%   delta = max(points3d(:,3))-min(points3d(:,3));
+%   m = min(points3d(:,3));
+%   c = (points3d(:,3)-m)/delta;
+%   figure;
+%   scatter3(points3d(:,1),points3d(:,3),points3d(:,2),0.1,c)
+%     
   [xProj, yProj] = rgb_world2rgb_plane(points3d);
 
   % Finally, project back onto the RGB plane.

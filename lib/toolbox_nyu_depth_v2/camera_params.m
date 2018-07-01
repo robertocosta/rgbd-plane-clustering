@@ -49,3 +49,12 @@ t_y = 6.6238747008330102e-04;
 % Parameters for making depth absolute.
 depthParam1 = 351.3;
 depthParam2 = 1092.5;
+
+kc_d = [k1_d, k2_d, p1_d, p2_d, k3_d];
+fc_d = [fx_d,fy_d];
+cc_d = [cx_d,cy_d]; 
+
+
+fc_rgb = [fx_rgb,fy_rgb];
+cc_rgb = [cx_rgb,cy_rgb]; 
+kc_rgb = [k1_rgb,k2_rgb,p1_rgb,p2_rgb,k3_rgb];

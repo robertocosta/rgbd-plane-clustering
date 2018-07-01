@@ -34,8 +34,18 @@ if glob.verbose
     set(f9,'Position',[10,40,800,500]);
     f10 = figure;
     set(f10,'Position',[10,40,800,500]);
-    
-     
+    f11 = figure;
+    set(f11,'Position',[39 39 814 573]);
+    f12 = figure;
+    set(f12,'Position',[531 39 814 573]);
+    f13 = figure;
+    set(f12,'Position',[1388 407 814 573]);
+    f14 = figure;
+    set(f14,'Position',[1958 446 814 573]);
+    f15 = figure;
+    set(f15,'Position',[2218 443 814 573]);
+    f16 = figure;
+    set(f16,'Position',[1712 527 814 573]);
 end
 pool = parpool;
 for i=1:length(scenes)
@@ -93,24 +103,52 @@ for i=1:length(scenes)
         subplot(122);imagesc(phiTh(:,:,2));title('Theta');colorbar;axis image;
     end
     %% clustering with kmeans
-    nx = n(:,:,1);
-    ny = n(:,:,2);
-    nz = n(:,:,3);
-    nTab = [nx(:),ny(:),nz(:)];
-    phi = phiTh(:,:,1);
-    theta = phiTh(:,:,2);
-    nTabSph = [phi(:),theta(:)];
-    
+    % Parallel toolbox settins
     stream = RandStream('mlfg6331_64');
     options = statset('UseParallel',1,'UseSubstreams',1,'Streams',stream);
-    [idxCart, ~, ~,~] = kmeans(nTab,12,'Options',options,'MaxIter',10000,...
+    % Cartesian normals
+    nx = n(:,:,1)/2+0.5;
+    ny = n(:,:,2)/2+0.5;
+    nz = n(:,:,3)/2+0.5;
+    nCartTab = [nx(:),ny(:),nz(:)];
+    [idxCart, ~, ~,~] = kmeans(nCartTab,12,'Options',options,...
+        'MaxIter',10000,'Display','final','Replicates',5,'EmptyAction',...
+        'drop', 'OnlinePhase','on');
+    % Spherical normals
+    phi = phiTh(:,:,1)/(2*pi)+0.5;
+    theta = phiTh(:,:,2)/pi+0.5;
+    nSphTab = [phi(:),theta(:)];
+    [idxSph, ~, ~,~] = kmeans(nSphTab,12,'Options',options,'MaxIter',10000,...
         'Display','final','Replicates',5,'EmptyAction','drop',...
         'OnlinePhase','on');
+    % Cart normals + RGB
+    r = double(rgb_undist(:,:,1))/255;
+    g = double(rgb_undist(:,:,2))/255;
+    b = double(rgb_undist(:,:,3))/255;
+    nCartRGBTab = [nCartTab,r(:),g(:),b(:)];
+    [idxCartRGB, ~, ~,~] = kmeans(nCartRGBTab,12,'Options',options,...
+        'MaxIter',10000,'Display','final','Replicates',5,'EmptyAction',...
+        'drop', 'OnlinePhase','on');
+    % Sph normals + RGB
+    nSphRGBTab = [nSphTab,r(:),g(:),b(:)];
+    [idxSphRGB, ~, ~,~] = kmeans(nSphRGBTab,12,'Options',options,...
+        'MaxIter',10000,'Display','final','Replicates',5,'EmptyAction',...
+        'drop', 'OnlinePhase','on');
+    % Depth + RGB
+    delta = max(rgb_depth(:))-min(rgb_depth(:));
+    depthRGBTab = [(rgb_depth(:)-min(rgb_depth(:)))/delta,r(:),g(:),b(:)];
+    [idxDepthRGB, ~, ~,~] = kmeans(depthRGBTab,12,'Options',options,...
+        'MaxIter',10000,'Display','final','Replicates',5,'EmptyAction',...
+        'drop', 'OnlinePhase','on');
+    % Depth + RGB + Cart
     
-    [idxSph, ~, ~,~] = kmeans(nTabSph,12,'Options',options,'MaxIter',10000,...
-        'Display','final','Replicates',5,'EmptyAction','drop',...
-        'OnlinePhase','on');
+    depthRGBnCartTab = [(rgb_depth(:)-min(rgb_depth(:)))/delta,...
+        r(:),g(:),b(:),nCartTab];
+    [idxDepthRGBnCart, ~, ~,~] = kmeans(depthRGBnCartTab,12,'Options',options,...
+        'MaxIter',10000,'Display','final','Replicates',5,'EmptyAction',...
+        'drop', 'OnlinePhase','on');
     
+    % Plots
     if glob.verbose
         set(0, 'currentfigure', f9);
         idxIm = reshape(idxCart,size(n,1),size(n,2));
@@ -119,6 +157,22 @@ for i=1:length(scenes)
         set(0, 'currentfigure', f10);
         idxIm = reshape(idxSph,size(n,1),size(n,2));
         imshow(label2rgb(idxIm));title('K-means labels - sph');
+        
+        set(0, 'currentfigure', f13);
+        idxIm = reshape(idxCartRGB,size(n,1),size(n,2));
+        imshow(label2rgb(idxIm));title('K-means labels - cart + RGB');
+        
+        set(0, 'currentfigure', f14);
+        idxIm = reshape(idxSphRGB,size(n,1),size(n,2));
+        imshow(label2rgb(idxIm));title('K-means labels - sph + RGB');
+        
+        set(0, 'currentfigure', f15);
+        idxIm = reshape(idxDepthRGB,size(n,1),size(n,2));
+        imshow(label2rgb(idxIm));title('K-means labels - RGB + D');
+        
+        set(0, 'currentfigure', f16);
+        idxIm = reshape(idxDepthRGBnCart,size(n,1),size(n,2));
+        imshow(label2rgb(idxIm));title('K-means labels - RGB + D + cart');
     end
     %% quantization 
     % quantization of the normals in the cartesian space
@@ -147,6 +201,7 @@ for i=1:length(scenes)
     end
     
     %% initial clusters
+    % Cartesian coordinates quantized normals
     labCart = zeros(nLevelsCart^3,3);
     initialClustersCart = cell(nLevelsCart^3,1);
     ind = 1;
@@ -160,7 +215,21 @@ for i=1:length(scenes)
             end
         end
     end
+    nonEmptyClusters = find(~cellfun(@isempty,initialClustersCart));
+    labCart = labCart(nonEmptyClusters,:);
+    clustersCart = initialClustersCart(nonEmptyClusters);
+    idxQuantCart = ones(size(n,1)*size(n,2),1);
+    for ii=1:length(clustersCart)
+        idxQuantCart(clustersCart{ii}) = ii;
+    end
+    idxQuantCartIm = reshape(idxQuantCart,size(n,1),size(n,2));
+    if glob.verbose
+        set(0, 'currentfigure', f11);
+        imshow(label2rgb(idxQuantCartIm));
+        title('Quantized normals - cart');
+    end
     
+    % Spherical coordinates quantized normals
     labSph = zeros(nLevelsSph^2,2);
     initialClustersSph = cell(nLevelsSph^2,1);
     ind = 1;
@@ -172,7 +241,19 @@ for i=1:length(scenes)
             ind = ind + 1;
         end
     end
-    
+    nonEmptyClusters = find(~cellfun(@isempty,initialClustersSph));
+    labSph = labSph(nonEmptyClusters,:);
+    clustersSph = initialClustersSph(nonEmptyClusters);
+    idxQuantSph = ones(size(n,1)*size(n,2),1);
+    for ii=1:length(clustersSph)
+        idxQuantSph(clustersSph{ii}) = ii;
+    end
+    idxQuantSphIm = reshape(idxQuantCart,size(n,1),size(n,2));
+    if glob.verbose
+        set(0, 'currentfigure', f12);
+        imshow(label2rgb(idxQuantSphIm));
+        title('Quantized normals - spherical');
+    end
     %{
     To Do:
     - examine the neighborhood in the grid of each initial cluster and

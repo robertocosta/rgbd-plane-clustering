@@ -21,31 +21,31 @@ end
 function [Irec] = rect(I, R, f, c, k, alpha, KK_new, noiseMask)
 
 
-  if nargin < 5,
+  if nargin < 5
      k = [0;0;0;0;0];
-     if nargin < 4,
+     if nargin < 4
         c = [0;0];
-        if nargin < 3,
+        if nargin < 3
            f = [1;1];
-           if nargin < 2,
+           if nargin < 2
               R = eye(3);
-              if nargin < 1,
+              if nargin < 1
                  error('ERROR: Need an image to rectify');
-              end;
-           end;
-        end;
-     end;
-  end;
+              end
+           end
+        end
+     end
+  end
 
 
-  if nargin < 7,
-     if nargin < 6,
+  if nargin < 7
+     if nargin < 6
       KK_new = [f(1) 0 c(1);0 f(2) c(2);0 0 1];
      else
       KK_new = alpha; % the 6th argument is actually KK_new   
-     end;
+     end
      alpha = 0;
-  end;
+  end
 
 
 
@@ -53,9 +53,9 @@ function [Irec] = rect(I, R, f, c, k, alpha, KK_new, noiseMask)
   % So: X2 = R*X where X: coord in the old reference frame, X2: coord in the new ref frame.
 
 
-  if ~exist('KK_new'),
+  if ~exist('KK_new')
      KK_new = [f(1) alpha*f(1) c(1);0 f(2) c(2);0 0 1];
-  end;
+  end
 
 
   [nr,nc] = size(I);
