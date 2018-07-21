@@ -15,7 +15,8 @@ function [imgPlanes, imgNormals, imgConfs] = ...
     compute_local_planes(X, Y, Z)
     params.planes.blockWidths = [1 3 6 9];
     params.planes.relDepthThresh = 0.05;
-    sz = [427 561];
+    sz = size(X);
+%     sz = [427 561];
     %X = X(45:471, 41:601);
     %Y = Y(45:471, 41:601);
     %Z = Z(45:471, 41:601);
@@ -66,7 +67,7 @@ function [imgPlanes, imgNormals, imgConfs] = ...
         ny(k) = eigv(2,1);
         nz(k) = eigv(3,1);
         nd(k) = eigv(4,1);
-        imgConfs(k) = 1 - abs(sqrt(l(1) / l(2,2))); 
+        imgConfs(k) = abs(sqrt(l(1) / l(2,2))); 
     end
 
     % Normalize so that first three coordinates form a unit normal vector and
